@@ -99,6 +99,12 @@ def get_admin_menu_keyboard() -> InlineKeyboardMarkup:
         ]
     )
 
+def get_webapp_url() -> str:
+    url = os.getenv("RENDER_EXTERNAL_URL") or os.getenv("WEBAPP_URL") or getattr(config, "WEBAPP_URL", "")
+    if not url or "vercel.app" in url:
+        return "https://roblox-script-bot.onrender.com"
+    return url
+
 def build_script_delivery_keyboard(script_code: str, channel_url: str) -> InlineKeyboardMarkup:
     """Creates the exact buttons requested: Copy, Channel, and Open Mini App."""
     buttons = [
@@ -107,8 +113,9 @@ def build_script_delivery_keyboard(script_code: str, channel_url: str) -> Inline
     row2 = []
     if channel_url:
         row2.append(InlineKeyboardButton(text="⚡ Больше скриптов", url=channel_url))
-    if config.WEBAPP_URL:
-        row2.append(InlineKeyboardButton(text="📱 Открыть Приложение", web_app=WebAppInfo(url=config.WEBAPP_URL)))
+    app_url = get_webapp_url()
+    if app_url:
+        row2.append(InlineKeyboardButton(text="📱 Открыть Приложение", web_app=WebAppInfo(url=app_url)))
     if row2:
         buttons.append(row2)
     return InlineKeyboardMarkup(inline_keyboard=buttons)
@@ -187,8 +194,9 @@ async def handle_start(message: Message, command: CommandObject):
     first_row = []
     if channel_url:
         first_row.append(InlineKeyboardButton(text="🚀 Перейти в канал", url=channel_url))
-    if config.WEBAPP_URL:
-        first_row.append(InlineKeyboardButton(text="📱 Открыть Приложение", web_app=WebAppInfo(url=config.WEBAPP_URL)))
+    app_url = get_webapp_url()
+    if app_url:
+        first_row.append(InlineKeyboardButton(text="📱 Открыть Приложение", web_app=WebAppInfo(url=app_url)))
     if first_row:
         keyboard_buttons.append(first_row)
     
@@ -231,9 +239,10 @@ async def handle_check_subscription(call: CallbackQuery):
             "Переходи, выбирай нужную игру и жми «Получить скрипт»!</i>"
         )
         buttons = []
+        app_url = get_webapp_url()
         row1 = [InlineKeyboardButton(text="🚀 Перейти в канал", url=channel_url)]
-        if config.WEBAPP_URL:
-            row1.append(InlineKeyboardButton(text="📱 Открыть Приложение", web_app=WebAppInfo(url=config.WEBAPP_URL)))
+        if app_url:
+            row1.append(InlineKeyboardButton(text="📱 Открыть Приложение", web_app=WebAppInfo(url=app_url)))
         buttons.append(row1)
         if await is_admin(user_id):
             buttons.append([InlineKeyboardButton(text="⚙️ Панель управления", callback_data="open_admin_panel")])
