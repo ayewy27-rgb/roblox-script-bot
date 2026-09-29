@@ -2,6 +2,7 @@ import os
 import asyncio
 import logging
 import sys
+import re
 from pathlib import Path
 from typing import Optional
 
@@ -45,6 +46,9 @@ class PostCreation(StatesGroup):
 
 class ChannelSetup(StatesGroup):
     waiting_for_channel = State()
+
+class DeltaUpload(StatesGroup):
+    waiting_for_apk = State()
 
 # Initialize Bot and Dispatcher
 bot = Bot(
@@ -102,6 +106,8 @@ def get_admin_menu_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [InlineKeyboardButton(text="➕ Создать пост со скриптом", callback_data="admin_create_post")],
+            [InlineKeyboardButton(text="📱 Обновить Delta APK (Автодельта)", callback_data="admin_upload_delta")],
+            [InlineKeyboardButton(text="📌 Опубликовать шапку канала", callback_data="admin_post_header")],
             [InlineKeyboardButton(text="📢 Привязать Telegram-канал", callback_data="admin_set_channel")],
             [InlineKeyboardButton(text="📋 Список скриптов", callback_data="admin_list_scripts")],
         ]
@@ -110,7 +116,6 @@ def get_admin_menu_keyboard() -> InlineKeyboardMarkup:
 def build_script_delivery_keyboard(channel_url: str) -> InlineKeyboardMarkup:
     buttons = [
         [InlineKeyboardButton(text="📢 Наш канал со скриптами ↗", url=channel_url or "https://t.me/script_drop")],
-        [InlineKeyboardButton(text="⭐ Лучшие скрипты", callback_data="show_top_scripts")],
     ]
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
@@ -218,8 +223,6 @@ async def handle_start(message: Message, command: CommandObject):
     if first_row:
         keyboard_buttons.append(first_row)
     
-    keyboard_buttons.append([InlineKeyboardButton(text="⭐ Лучшие скрипты", callback_data="show_top_scripts")])
-    
     if is_user_admin:
         keyboard_buttons.append([InlineKeyboardButton(text="⚙️ Панель управления", callback_data="open_admin_panel")])
         
@@ -264,7 +267,6 @@ async def handle_check_subscription(call: CallbackQuery):
         if app_url:
             row1.append(InlineKeyboardButton(text="📱 Открыть Приложение", web_app=WebAppInfo(url=app_url)))
         buttons.append(row1)
-        buttons.append([InlineKeyboardButton(text="⭐ Лучшие скрипты", callback_data="show_top_scripts")])
         if await is_admin(user_id):
             buttons.append([InlineKeyboardButton(text="⚙️ Панель управления", callback_data="open_admin_panel")])
         reply_markup = InlineKeyboardMarkup(inline_keyboard=buttons)
@@ -284,33 +286,6 @@ async def handle_check_subscription(call: CallbackQuery):
 
     await database.record_user_received(user_id, target)
     await deliver_script_to_user(call.message.chat.id, script, channel_url)
-
-
-@dp.callback_query(F.data == "show_top_scripts")
-async def handle_show_top_scripts(call: CallbackQuery):
-    channel = await database.get_setting("channel_id", config.CHANNEL_ID)
-    channel_clean = channel.replace("@", "") if channel else "script_drop"
-    channel_url = f"https://t.me/{channel_clean}"
-    
-    text = (
-        "⭐ <b>ТОП ЛУЧШИХ СКРИПТОВ ROBLOX:</b>\n\n"
-        "🔥 <b>1. Blox Fruits</b> — Auto Farm, Teleport, ESP, Auto Raid\n"
-        "🔥 <b>2. Blade Ball</b> — Auto Parry, Spam, Curve, Visuals\n"
-        "🔥 <b>3. Steal an Egg</b> — Auto Steal, Instant Hatch, WalkSpeed\n"
-        "🔥 <b>4. Rivals</b> — Silent Aim, ESP, Box, Infinite Ammo\n"
-        "🔥 <b>5. Murder Mystery 2</b> — Auto Farm, ESP, Silent Aim\n\n"
-        f"📢 <i>Все свежие релизы и скрипты ждут тебя в канале:</i> @{channel_clean}"
-    )
-    
-    kb_rows = [
-        [InlineKeyboardButton(text="📢 Перейти в канал @script_drop", url=channel_url)],
-    ]
-    app_url = get_webapp_url()
-    if app_url:
-        kb_rows.append([InlineKeyboardButton(text="📱 Открыть в приложении", web_app=WebAppInfo(url=app_url))])
-        
-    await call.message.answer(text, reply_markup=InlineKeyboardMarkup(inline_keyboard=kb_rows))
-    await call.answer()
 
 
 
@@ -528,9 +503,10 @@ async def publish_to_channel(call: CallbackQuery):
     try:
         if config.BANNER_PATH.exists():
             photo = FSInputFile(config.BANNER_PATH)
-            await bot.send_photo(chat_id=channel, photo=photo, caption=post_text, reply_markup=post_kb)
+            sent = await bot.send_photo(chat_id=channel, photo=photo, caption=post_text, reply_markup=post_kb)
         else:
-            await bot.send_message(chat_id=channel, text=post_text, reply_markup=post_kb)
+            sent = await bot.send_message(chat_id=channel, text=post_text, reply_markup=post_kb)
+        await database.update_script_channel_post(script_key, sent.message_id)
         await call.answer("✅ Пост успешно опубликован в канал!", show_alert=True)
     except Exception as e:
         logger.error(f"Failed to post to channel: {e}")
@@ -611,6 +587,284 @@ async def cancel_handler(call: CallbackQuery, state: FSMContext):
     await state.clear()
     await call.message.edit_text("❌ Действие отменено.")
     await call.answer()
+
+
+# --- AUTO DELTA EXECUTOR (APK AUTO-UPDATER) ---
+
+def extract_delta_version(file_name: str) -> str:
+    """Extracts version like v2.648, 2.648, v2_648 from filename."""
+    match = re.search(r'[vV]?(\d+[\.\-_]\d+(?:[\.\-_]\d+)?)', file_name)
+    if match:
+        v = match.group(1).replace('_', '.').replace('-', '.')
+        return f"v{v}" if not v.startswith('v') else v
+    return "Последняя версия (Latest)"
+
+@dp.callback_query(F.data == "admin_upload_delta")
+async def start_delta_upload(call: CallbackQuery, state: FSMContext):
+    if not await is_admin(call.from_user.id):
+        await call.answer("⛔ Нет доступа", show_alert=True)
+        return
+
+    await state.set_state(DeltaUpload.waiting_for_apk)
+    cancel_kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="❌ Отмена", callback_data="cancel_fsm")]])
+
+    await call.message.answer(
+        "📱 <b>Загрузка новой версии Delta Executor (Автодельта)</b>\n\n"
+        "Отправьте мне файл <code>.apk</code> новой версии (например: <code>Delta_v2.648.apk</code>).\n\n"
+        "🤖 <b>Что сделает бот автоматически:</b>\n"
+        "1. Распознает версию из названия файла\n"
+        "2. Удалит предыдущий закреплённый пост с Дельтой в канале\n"
+        "3. Опубликует файл APK с инструкцией по установке\n"
+        "4. Закрепит новую версию в канале @script_drop!",
+        reply_markup=cancel_kb,
+    )
+    await call.answer()
+
+@dp.message(F.document)
+async def handle_document_upload(message: Message, state: FSMContext):
+    user_id = message.from_user.id if message.from_user else 0
+    if not await is_admin(user_id):
+        return
+
+    doc = message.document
+    file_name = doc.file_name or "Delta.apk"
+    is_apk = file_name.lower().endswith(".apk") or "delta" in file_name.lower()
+
+    curr_state = await state.get_state()
+    if not is_apk and curr_state != DeltaUpload.waiting_for_apk:
+        return
+
+    channel = await database.get_setting("channel_id", config.CHANNEL_ID)
+    if not channel:
+        await message.answer("⚠️ Канал ещё не привязан! Сначала привяжите канал в /admin.")
+        return
+
+    version = extract_delta_version(file_name)
+    channel_clean = channel.replace("@", "")
+    bot_info = await bot.get_me()
+    bot_user = bot_info.username or config.BOT_USERNAME
+
+    status_msg = await message.answer(f"⏳ <b>Публикация Delta {version} в канал @{channel_clean}...</b>")
+
+    # 1. Delete or unpin previous Delta message if exists
+    old_msg_id = await database.get_setting("last_delta_message_id")
+    if old_msg_id and old_msg_id.isdigit():
+        try:
+            await bot.delete_message(chat_id=channel, message_id=int(old_msg_id))
+            logger.info(f"Deleted old Delta post {old_msg_id} from {channel}")
+        except Exception as e:
+            logger.warning(f"Could not delete old Delta post {old_msg_id}: {e}")
+            try:
+                await bot.unpin_chat_message(chat_id=channel, message_id=int(old_msg_id))
+            except Exception:
+                pass
+
+    caption = (
+        f"📱 <b>DELTA EXECUTOR | ПОСЛЕДНЯЯ ВЕРСИЯ ДЛЯ ТЕЛЕФОНА</b> 📱\n\n"
+        f"⚡ <b>Версия:</b> <code>{version}</code>\n"
+        f"🤖 <b>Платформа:</b> Android (Телефон / Планшет)\n"
+        f"🛡 <b>Статус:</b> 🟢 <i>Работает / Undetected</i>\n\n"
+        f"📝 <b>Инструкция по установке:</b>\n"
+        f"1️⃣ Скачайте файл <code>{file_name}</code> выше\n"
+        f"2️⃣ Установите APK на телефон (если пишет «Файл может быть опасным» — нажмите «Всё равно установить», это ложное срабатывание антивируса на любой игровой чит)\n"
+        f"3️⃣ Запустите установленный Roblox и зайдите в нужную игру\n"
+        f"4️⃣ Копируйте скрипты из нашего канала @{channel_clean} через бота @{bot_user} и вставляйте в консоль Delta!\n\n"
+        f"🚀 <b>Приятной игры без банов!</b>"
+    )
+
+    delta_kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="🤖 Получить скрипты для игр", url=f"https://t.me/{bot_user}")],
+            [InlineKeyboardButton(text="📢 Наш канал со скриптами", url=f"https://t.me/{channel_clean}")],
+        ]
+    )
+
+    try:
+        sent_file = await bot.send_document(
+            chat_id=channel,
+            document=doc.file_id,
+            caption=caption,
+            reply_markup=delta_kb,
+        )
+
+        try:
+            await bot.pin_chat_message(chat_id=channel, message_id=sent_file.message_id, disable_notification=False)
+        except Exception as e:
+            logger.warning(f"Failed to pin Delta message: {e}")
+
+        await database.set_setting("last_delta_message_id", str(sent_file.message_id))
+        await database.set_setting("last_delta_version", version)
+
+        await status_msg.edit_text(
+            f"✅ <b>Delta Executor успешно обновлена и закреплена!</b>\n\n"
+            f"⚡ Версия: <code>{version}</code>\n"
+            f"📌 Опубликована в канале: <b>@{channel_clean}</b>\n"
+            f"🗑 Предыдущий пост с Дельтой автоматически удалён."
+        )
+        await state.clear()
+    except Exception as e:
+        logger.error(f"Error publishing Delta APK: {e}")
+        await status_msg.edit_text(
+            f"❌ <b>Ошибка при публикации APK в канал:</b>\n<code>{e}</code>\n\n"
+            "Убедитесь, что бот является администратором канала с правами на публикацию и закрепление сообщений."
+        )
+
+
+# --- CHANNEL HEADER (PINNED NAVIGATION POST) ---
+
+def build_channel_header_text(bot_username: str) -> str:
+    return (
+        "⚡ <b>ДОБРО ПОЖАЛОВАТЬ В SCRIPT DROP!</b> ⚡\n"
+        "━━━━━━━━━━━━━━━━━━━━━\n"
+        "🔥 <i>Самый проверенный и безопасный источник скриптов для Roblox.</i>\n\n"
+        "🛡 <b>БЕЗ ВИРУСОВ, СТИЛЕРОВ И РЕКЛАМЫ:</b>\n"
+        "Все скрипты проверяются администрацией перед публикацией. "
+        "Только открытые и чистые loadstring-скрипты.\n\n"
+        "━━━━━━━━━━━━━━━━━━━━━\n"
+        "🚀 <b>КАК ПОЛУЧИТЬ СКРИПТ:</b>\n"
+        "1️⃣ Выберите нужную игру в постах канала\n"
+        "2️⃣ Нажмите под постом кнопку <b>«🚀 Получить скрипт»</b>\n"
+        f"3️⃣ Наш бот @{bot_username} мгновенно выдаст код с кнопкой копирования!\n\n"
+        "━━━━━━━━━━━━━━━━━━━━━\n"
+        "📱 <b>ЧЕМ ЗАПУСКАТЬ (ИНЖЕКТОРЫ):</b>\n"
+        "• <b>Телефон (Android):</b> Delta Executor — свежая версия всегда закреплена выше в канале! Также работают: Codex, Arceus X, Fluxus.\n"
+        "• <b>Компьютер (PC):</b> Solara, Wave, Codex PC, Xeno.\n\n"
+        "━━━━━━━━━━━━━━━━━━━━━\n"
+        "🔍 <b>ПОИСК СКРИПТОВ ЧЕРЕЗ БОТА:</b>\n"
+        f"Напишите нашему боту @{bot_username} название игры (например: <code>Blade Ball</code>, <code>Blox Fruits</code>, <code>Rivals</code>) — он найдёт последний рабочий скрипт!\n\n"
+        "📌 <b>ОСНОВНЫЕ ТЕГИ КАНАЛА:</b>\n"
+        "#BloxFruits  #BladeBall  #StealAnEgg\n"
+        "#Rivals  #MM2  #BedWars  #DaHood\n\n"
+        "━━━━━━━━━━━━━━━━━━━━━\n"
+        f"🤖 <b>Бот выдачи:</b> @{bot_username}\n"
+        "👑 <b>Владелец:</b> @olarbebe\n\n"
+        "⭐ <i>Включите уведомления, чтобы не пропускать обновления скриптов после апдейтов Roblox!</i>"
+    )
+
+@dp.callback_query(F.data == "admin_post_header")
+async def prompt_post_header(call: CallbackQuery):
+    if not await is_admin(call.from_user.id):
+        await call.answer("⛔ Нет доступа", show_alert=True)
+        return
+
+    kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="✅ Опубликовать и закрепить", callback_data="do_post_header")],
+            [InlineKeyboardButton(text="◀️ Назад в меню", callback_data="open_admin_panel")],
+        ]
+    )
+    await call.message.answer(
+        "📌 <b>Публикация официальной шапки в канал</b>\n\n"
+        "Бот отправит оформленный пост-навигацию со всеми правилами, ссылками на бот/Mini App и инструкциями, и закрепит его в канале.\n\n"
+        "Опубликовать сейчас?",
+        reply_markup=kb,
+    )
+    await call.answer()
+
+@dp.callback_query(F.data == "do_post_header")
+async def execute_post_header(call: CallbackQuery):
+    if not await is_admin(call.from_user.id):
+        await call.answer("⛔ Нет доступа", show_alert=True)
+        return
+
+    channel = await database.get_setting("channel_id", config.CHANNEL_ID)
+    if not channel:
+        await call.answer("⚠️ Канал ещё не привязан!", show_alert=True)
+        return
+
+    bot_info = await bot.get_me()
+    bot_user = bot_info.username or config.BOT_USERNAME
+    channel_clean = channel.replace("@", "")
+    header_text = build_channel_header_text(bot_user)
+
+    header_kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="🤖 Открыть бота со скриптами", url=f"https://t.me/{bot_user}")],
+            [InlineKeyboardButton(text="📱 Каталог скриптов (App)", web_app=WebAppInfo(url=get_webapp_url()))],
+        ]
+    )
+
+    try:
+        if config.BANNER_PATH.exists():
+            photo = FSInputFile(config.BANNER_PATH)
+            sent = await bot.send_photo(chat_id=channel, photo=photo, caption=header_text, reply_markup=header_kb)
+        else:
+            sent = await bot.send_message(chat_id=channel, text=header_text, reply_markup=header_kb)
+
+        try:
+            await bot.pin_chat_message(chat_id=channel, message_id=sent.message_id, disable_notification=False)
+        except Exception as e:
+            logger.warning(f"Could not pin header: {e}")
+
+        await database.set_setting("last_header_message_id", str(sent.message_id))
+        await call.message.answer(f"🎉 <b>Шапка канала успешно опубликована и закреплена в @{channel_clean}!</b>")
+        await call.answer("✅ Готово!")
+    except Exception as e:
+        logger.error(f"Error posting header: {e}")
+        await call.message.answer(f"❌ <b>Ошибка при публикации шапки:</b>\n<code>{e}</code>")
+        await call.answer("Ошибка")
+
+
+# --- USER SEARCH HANDLER ---
+
+@dp.message(F.text)
+async def handle_user_search(message: Message, state: FSMContext):
+    # Ignore if in an FSM state or command
+    if await state.get_state():
+        return
+    text = message.text.strip()
+    if text.startswith("/"):
+        return
+
+    channel = await database.get_setting("channel_id", config.CHANNEL_ID)
+    channel_clean = channel.replace("@", "") if channel else "script_drop"
+    bot_info = await bot.get_me()
+    bot_user = bot_info.username or config.BOT_USERNAME
+
+    results = await database.search_scripts(text, limit=5)
+    if not results:
+        kb = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [InlineKeyboardButton(text="📢 Искать в канале @script_drop", url=f"https://t.me/{channel_clean}")],
+                [InlineKeyboardButton(text="📱 Открыть каталог", web_app=WebAppInfo(url=get_webapp_url()))],
+            ]
+        )
+        await message.answer(
+            f"🔍 По запросу «<b>{text}</b>» скриптов пока нет.\n\n"
+            f"Попробуйте написать название игры на английском (например: <code>Blox Fruits</code>, <code>Blade Ball</code>, <code>Steal an Egg</code>) или посмотрите свежие релизы в нашем канале! 👇",
+            reply_markup=kb,
+        )
+        return
+
+    # Take the latest matching script
+    latest = results[0]
+    game_name = latest["game_name"]
+    script_key = latest["script_key"]
+    features = latest.get("features", "")
+    executors = latest.get("executors", post_builder.DEFAULT_EXECUTORS)
+    channel_msg_id = latest.get("channel_message_id")
+
+    msg_text = (
+        f"🔍 <b>Найден скрипт для игры: {game_name}</b> ⚡\n\n"
+        f"🛠 <b>Функционал последнего релиза:</b>\n"
+        f"{features}\n\n"
+        f"📱 <b>Поддержка:</b> {executors}\n"
+        f"📌 <b>Статус:</b> 🟢 <i>Работает / Undetected</i>\n\n"
+        f"👇 <b>Выберите действие:</b>"
+    )
+
+    kb_buttons = []
+    if channel_msg_id:
+        post_url = f"https://t.me/{channel_clean}/{channel_msg_id}"
+        kb_buttons.append([InlineKeyboardButton(text="🚀 Перейти к посту в канале ↗", url=post_url)])
+
+    deep_link = f"https://t.me/{bot_user}?start={script_key}"
+    kb_buttons.append([InlineKeyboardButton(text="⚡ Получить скрипт в боте", url=deep_link)])
+
+    if not channel_msg_id:
+        kb_buttons.append([InlineKeyboardButton(text="📢 Наш канал со скриптами ↗", url=f"https://t.me/{channel_clean}")])
+
+    await message.answer(msg_text, reply_markup=InlineKeyboardMarkup(inline_keyboard=kb_buttons))
 
 # --- WEB SERVER FOR MINI APP API ---
 

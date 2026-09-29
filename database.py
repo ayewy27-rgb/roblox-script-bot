@@ -33,13 +33,66 @@ async def init_db():
             )
         """)
         
-        # Check if executors column exists in older table
+        # Check if executors and channel_message_id columns exist in older table
         async with db.execute("PRAGMA table_info(scripts)") as cursor:
             columns = [row[1] for row in await cursor.fetchall()]
             if "executors" not in columns:
                 await db.execute(f"ALTER TABLE scripts ADD COLUMN executors TEXT DEFAULT '{DEFAULT_EXECUTORS}'")
+            if "channel_message_id" not in columns:
+                await db.execute("ALTER TABLE scripts ADD COLUMN channel_message_id INTEGER DEFAULT NULL")
                 
         await db.commit()
+
+async def update_script_channel_post(script_key: str, message_id: int):
+    """Saves the channel message ID of the published post."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            "UPDATE scripts SET channel_message_id = ? WHERE script_key = ?",
+            (message_id, script_key)
+        )
+        await db.commit()
+
+async def search_scripts(query: str, limit: int = 5) -> List[Dict[str, Any]]:
+    """Searches scripts by game name or features, handling Russian aliases."""
+    raw = query.strip().lower()
+    
+    synonyms = {
+        "блокс": "blox",
+        "фрут": "fruit",
+        "блейд": "blade",
+        "бол": "ball",
+        "стил": "steal",
+        "яйц": "egg",
+        "райвал": "rivals",
+        "ривал": "rivals",
+        "мардер": "murder",
+        "мм2": "murder",
+        "бедварс": "bedwars",
+        "дахуд": "hood",
+        "дорс": "doors",
+        "брукхейвен": "brookhaven",
+    }
+    
+    normalized = raw
+    for ru, en in synonyms.items():
+        if ru in normalized:
+            normalized = normalized.replace(ru, en)
+            
+    pattern1 = f"%{raw}%"
+    pattern2 = f"%{normalized}%"
+    
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        sql = """
+            SELECT * FROM scripts
+            WHERE LOWER(game_name) LIKE ? OR LOWER(game_name) LIKE ?
+               OR LOWER(features) LIKE ? OR LOWER(features) LIKE ?
+            ORDER BY id DESC
+            LIMIT ?
+        """
+        async with db.execute(sql, (pattern1, pattern2, pattern1, pattern2, limit)) as cursor:
+            rows = await cursor.fetchall()
+            return [dict(r) for r in rows]
 
 async def record_user_received(user_id: int, script_key: str):
     """Records that this specific user opened/received this script."""
