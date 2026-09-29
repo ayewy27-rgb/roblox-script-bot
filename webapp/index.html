@@ -13,6 +13,7 @@
       --text: #ffffff;
       --text-muted: #8e8e93;
       --accent: #22c55e;
+      --accent-glow: rgba(34, 197, 94, 0.25);
       --danger: #ef4444;
       --btn-bg: #242429;
       --btn-hover: #2c2c33;
@@ -26,13 +27,17 @@
       user-select: none;
     }
 
+    html {
+      scroll-behavior: smooth;
+    }
+
     body {
       background: var(--bg);
       color: var(--text);
       font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
       min-height: 100vh;
       padding: 16px;
-      padding-bottom: 40px;
+      padding-bottom: 60px;
     }
 
     .container {
@@ -45,7 +50,7 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
-      margin-bottom: 20px;
+      margin-bottom: 18px;
       padding-top: 4px;
     }
 
@@ -53,6 +58,9 @@
       font-size: 20px;
       font-weight: 700;
       letter-spacing: -0.4px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
     }
 
     .user-badge {
@@ -70,7 +78,7 @@
       border: 1px solid var(--card-border);
       border-radius: 16px;
       padding: 16px;
-      margin-bottom: 16px;
+      margin-bottom: 14px;
     }
 
     .channel-title {
@@ -101,11 +109,12 @@
       text-decoration: none;
       border: none;
       cursor: pointer;
-      transition: opacity 0.15s;
+      transition: opacity 0.15s, transform 0.15s;
     }
 
     .btn-channel:active {
       opacity: 0.85;
+      transform: scale(0.98);
     }
 
     /* Subscription Card */
@@ -114,7 +123,7 @@
       border: 1px solid var(--card-border);
       border-radius: 16px;
       padding: 16px;
-      margin-bottom: 24px;
+      margin-bottom: 18px;
     }
 
     .sub-header {
@@ -142,27 +151,102 @@
       margin-bottom: 12px;
     }
 
+    /* Animated Checkmark SVG & Icon */
     .status-icon {
-      width: 36px;
-      height: 36px;
+      width: 38px;
+      height: 38px;
+      min-width: 38px;
       border-radius: 50%;
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 16px;
-      font-weight: 700;
+      position: relative;
+      transition: all 0.3s ease;
     }
 
     .status-icon.active {
-      background: rgba(34, 197, 94, 0.15);
-      color: var(--accent);
-      border: 1px solid rgba(34, 197, 94, 0.3);
+      background: rgba(34, 197, 94, 0.14);
+      border: 1px solid rgba(34, 197, 94, 0.35);
+      animation: pulseGlow 2.5s infinite;
     }
 
     .status-icon.inactive {
-      background: rgba(239, 68, 68, 0.15);
-      color: var(--danger);
-      border: 1px solid rgba(239, 68, 68, 0.3);
+      background: rgba(239, 68, 68, 0.14);
+      border: 1px solid rgba(239, 68, 68, 0.35);
+    }
+
+    .checkmark-svg {
+      width: 24px;
+      height: 24px;
+      display: block;
+    }
+
+    .checkmark-circle {
+      stroke-dasharray: 166;
+      stroke-dashoffset: 166;
+      stroke-width: 3.5;
+      stroke-miterlimit: 10;
+      stroke: var(--accent);
+      fill: none;
+      animation: strokeCircle 0.55s cubic-bezier(0.65, 0, 0.45, 1) forwards;
+    }
+
+    .checkmark-check {
+      transform-origin: 50% 50%;
+      stroke-dasharray: 48;
+      stroke-dashoffset: 48;
+      stroke-width: 3.8;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      stroke: var(--accent);
+      fill: none;
+      animation: strokeCheck 0.35s cubic-bezier(0.65, 0, 0.45, 1) 0.4s forwards;
+    }
+
+    @keyframes strokeCircle {
+      100% { stroke-dashoffset: 0; }
+    }
+
+    @keyframes strokeCheck {
+      100% { stroke-dashoffset: 0; }
+    }
+
+    .cross-svg {
+      width: 24px;
+      height: 24px;
+      display: block;
+    }
+
+    .cross-circle {
+      stroke-dasharray: 166;
+      stroke-dashoffset: 166;
+      stroke-width: 3.5;
+      stroke: var(--danger);
+      fill: none;
+      animation: strokeCircle 0.5s cubic-bezier(0.65, 0, 0.45, 1) forwards;
+    }
+
+    .cross-line {
+      stroke-dasharray: 30;
+      stroke-dashoffset: 30;
+      stroke-width: 3.5;
+      stroke-linecap: round;
+      stroke: var(--danger);
+      animation: strokeCheck 0.3s cubic-bezier(0.65, 0, 0.45, 1) 0.35s forwards;
+    }
+
+    .status-icon.spin {
+      animation: rotateIcon 0.8s linear infinite !important;
+    }
+
+    @keyframes rotateIcon {
+      100% { transform: rotate(360deg); }
+    }
+
+    @keyframes pulseGlow {
+      0% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.4); }
+      50% { box-shadow: 0 0 12px 3px rgba(34, 197, 94, 0.25); }
+      100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
     }
 
     .status-text h4 {
@@ -197,13 +281,73 @@
       align-items: center;
       justify-content: center;
       gap: 6px;
+      transition: background 0.15s, transform 0.15s;
     }
 
     .btn-sub:active {
       background: var(--btn-hover);
+      transform: scale(0.97);
     }
 
-    /* History Section */
+    /* Tabs Navigation */
+    .tabs-nav {
+      display: flex;
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 4px;
+      margin-bottom: 16px;
+      gap: 4px;
+    }
+
+    .tab-btn {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 10px 8px;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-muted);
+      background: transparent;
+      border: none;
+      border-radius: 9px;
+      cursor: pointer;
+      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .tab-btn.active {
+      background: var(--btn-bg);
+      color: #ffffff;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+    }
+
+    .tab-btn:active {
+      transform: scale(0.97);
+    }
+
+    .tab-badge {
+      font-size: 11px;
+      background: rgba(255, 255, 255, 0.08);
+      padding: 2px 7px;
+      border-radius: 10px;
+      color: var(--text-muted);
+    }
+
+    .tab-badge.hot {
+      background: rgba(239, 68, 68, 0.2);
+      color: #f87171;
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      font-weight: 700;
+    }
+
+    .tab-btn.active .tab-badge:not(.hot) {
+      background: rgba(255, 255, 255, 0.15);
+      color: #ffffff;
+    }
+
+    /* Scripts Section & Animation */
     .section-title {
       font-size: 15px;
       font-weight: 600;
@@ -219,11 +363,28 @@
       gap: 12px;
     }
 
+    @keyframes cascadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(16px) scale(0.98);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
+    }
+
     .script-item {
       background: var(--card-bg);
       border: 1px solid var(--card-border);
       border-radius: 14px;
       padding: 14px;
+      animation: cascadeIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) backwards;
+      transition: transform 0.15s, border-color 0.15s;
+    }
+
+    .script-item:active {
+      transform: scale(0.99);
     }
 
     .item-header {
@@ -236,6 +397,9 @@
     .item-name {
       font-size: 15px;
       font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 6px;
     }
 
     .item-badge {
@@ -244,6 +408,12 @@
       background: rgba(255, 255, 255, 0.06);
       padding: 3px 8px;
       border-radius: 6px;
+    }
+
+    .item-badge.hot-badge {
+      color: #34d399;
+      background: rgba(16, 185, 129, 0.12);
+      border: 1px solid rgba(16, 185, 129, 0.25);
     }
 
     .item-features {
@@ -282,21 +452,23 @@
       align-items: center;
       justify-content: center;
       gap: 6px;
-      transition: background 0.15s;
+      transition: background 0.15s, transform 0.15s;
     }
 
     .btn-copy:active {
       background: var(--btn-hover);
+      transform: scale(0.98);
     }
 
     /* Empty State */
     .empty-state {
       text-align: center;
-      padding: 40px 20px;
+      padding: 36px 20px;
       background: var(--card-bg);
       border: 1px solid var(--card-border);
       border-radius: 14px;
       color: var(--text-muted);
+      animation: cascadeIn 0.3s ease;
     }
 
     .empty-icon {
@@ -313,6 +485,64 @@
 
     .empty-sub {
       font-size: 12px;
+      line-height: 1.4;
+      margin-bottom: 14px;
+    }
+
+    .btn-empty-top {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--btn-bg);
+      color: #ffffff;
+      font-size: 13px;
+      font-weight: 600;
+      padding: 8px 16px;
+      border-radius: 20px;
+      border: 1px solid var(--card-border);
+      cursor: pointer;
+      transition: transform 0.15s;
+    }
+
+    .btn-empty-top:active {
+      transform: scale(0.96);
+    }
+
+    /* Floating Rewind / Scroll to Top Button */
+    #btn-rewind {
+      position: fixed;
+      bottom: 22px;
+      right: 20px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(30, 30, 36, 0.88);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      color: #ffffff;
+      padding: 10px 16px;
+      border-radius: 24px;
+      font-size: 13px;
+      font-weight: 600;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+      cursor: pointer;
+      opacity: 0;
+      visibility: hidden;
+      transform: translateY(20px) scale(0.9);
+      transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+      z-index: 900;
+    }
+
+    #btn-rewind.visible {
+      opacity: 1;
+      visibility: visible;
+      transform: translateY(0) scale(1);
+    }
+
+    #btn-rewind:active {
+      transform: scale(0.92);
+      background: rgba(45, 45, 55, 0.95);
     }
 
     /* Toast */
@@ -366,7 +596,13 @@
       </div>
 
       <div class="sub-status" id="sub-status-box">
-        <div class="status-icon active" id="status-icon">✓</div>
+        <div class="status-icon active" id="status-icon">
+          <!-- Animated Checkmark SVG -->
+          <svg class="checkmark-svg" viewBox="0 0 52 52">
+            <circle class="checkmark-circle" cx="26" cy="26" r="23" />
+            <path class="checkmark-check" d="M14.1 27.2l7.1 7.2 16.7-16.8" />
+          </svg>
+        </div>
         <div class="status-text">
           <h4 id="status-title">Подписка активна</h4>
           <p id="status-sub">Доступ ко всем скриптам открыт</p>
@@ -383,17 +619,34 @@
       </div>
     </div>
 
-    <!-- Real Script History -->
+    <!-- Navigation Tabs: History & Best Scripts -->
+    <div class="tabs-nav">
+      <button class="tab-btn active" id="tab-my" onclick="switchTab('my')">
+        <span>📋 Моя история</span>
+        <span class="tab-badge" id="tab-my-count">0</span>
+      </button>
+      <button class="tab-btn" id="tab-top" onclick="switchTab('top')">
+        <span>⭐ Лучшие скрипты</span>
+        <span class="tab-badge hot">HOT</span>
+      </button>
+    </div>
+
+    <!-- Scripts List Section -->
     <div class="section-title">
-      <span>История скриптов</span>
+      <span id="section-heading">История скриптов</span>
       <span style="font-size: 12px; color: var(--text-muted);" id="scripts-counter">0</span>
     </div>
 
     <div class="scripts-list" id="scripts-container">
-      <!-- Filled ONLY from real database -->
+      <!-- Injected dynamically -->
     </div>
 
   </div>
+
+  <!-- Floating Rewind / Scroll To Top Button -->
+  <button id="btn-rewind" onclick="rewindToTop()">
+    <span>▲</span> Наверх
+  </button>
 
   <div id="toast">Скопировано в буфер</div>
 
@@ -417,87 +670,206 @@
       setTimeout(() => t.classList.remove('show'), 2000);
     }
 
-    function setSubState(isSub) {
+    // Animated Checkmark / Status Renderer
+    function renderStatusIcon(isSub) {
       const icon = document.getElementById('status-icon');
       const title = document.getElementById('status-title');
       const sub = document.getElementById('status-sub');
 
+      icon.classList.remove('spin');
+
       if (isSub) {
         icon.className = 'status-icon active';
-        icon.textContent = '✓';
+        icon.innerHTML = `
+          <svg class="checkmark-svg" viewBox="0 0 52 52">
+            <circle class="checkmark-circle" cx="26" cy="26" r="23" />
+            <path class="checkmark-check" d="M14.1 27.2l7.1 7.2 16.7-16.8" />
+          </svg>
+        `;
         title.textContent = 'Подписка активна';
         sub.textContent = 'Доступ ко всем скриптам открыт';
       } else {
         icon.className = 'status-icon inactive';
-        icon.textContent = '✕';
+        icon.innerHTML = `
+          <svg class="cross-svg" viewBox="0 0 52 52">
+            <circle class="cross-circle" cx="26" cy="26" r="23" />
+            <path class="cross-line" d="M16 16 L36 36" />
+            <path class="cross-line" d="M36 16 L16 36" />
+          </svg>
+        `;
         title.textContent = 'Не подписан';
         sub.textContent = 'Подпишитесь на @script_drop для доступа';
       }
     }
 
+    // Check Status Button with Spin Animation
     document.getElementById('btn-check').addEventListener('click', async () => {
+      const icon = document.getElementById('status-icon');
+      icon.innerHTML = `<svg viewBox="0 0 24 24" width="22" height="22" stroke="var(--text-muted)" stroke-width="2.5" fill="none"><circle cx="12" cy="12" r="10" stroke-opacity="0.25"/><path d="M12 2 A10 10 0 0 1 22 12" /></svg>`;
+      icon.classList.add('spin');
+
       const userId = tg?.initDataUnsafe?.user?.id;
+      let isSubscribed = true;
+
       if (userId) {
         try {
           const res = await fetch(`/api/check_sub?user_id=${userId}`);
           const d = await res.json();
-          setSubState(d.subscribed);
-          showToast(d.subscribed ? 'Подписка активна' : 'Вы не подписаны');
-          return;
-        } catch (e) {}
+          isSubscribed = !!d.subscribed;
+        } catch (e) {
+          isSubscribed = true;
+        }
       }
-      showToast('Подписка активна');
-      setSubState(true);
+
+      setTimeout(() => {
+        renderStatusIcon(isSubscribed);
+        showToast(isSubscribed ? 'Подписка активна ✓' : 'Вы не подписаны');
+      }, 400);
     });
 
-    async function loadRealScripts() {
-      const container = document.getElementById('scripts-container');
-      const counter = document.getElementById('scripts-counter');
+    // Rewind / Scroll to Top logic
+    window.addEventListener('scroll', () => {
+      const btn = document.getElementById('btn-rewind');
+      if (window.scrollY > 140) {
+        btn.classList.add('visible');
+      } else {
+        btn.classList.remove('visible');
+      }
+    });
 
+    function rewindToTop() {
+      if (tg?.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
+      window.scrollTo({
+        top: 0,
+        behavior: 'smooth'
+      });
+    }
+
+    // Curated Top Scripts
+    const TOP_SCRIPTS = [
+      {
+        game_name: 'Blox Fruits',
+        badge: '⭐ 9.9 | 🔥 150k+ онлайн',
+        executors: 'ПК и Мобильные (Delta, Arceus X, Fluxus, Codex, Solara)',
+        features: '• ESP (Подсветка игроков, сундуков и фруктов)\n• Auto Farm Level & Mastery (Авто-фарм уровня)\n• Auto Raid & Dungeon (Прохождение рейдов)\n• Teleport, Safe Zone, WalkSpeed',
+        script_code: 'loadstring(game:HttpGet("https://raw.githubusercontent.com/JustParadozCode/LinkHive---Scripts/refs/heads/main/script.lua"))()'
+      },
+      {
+        game_name: 'Blade Ball',
+        badge: '⭐ 9.8 | ⚔️ Undetected',
+        executors: 'ПК и Мобильные (Delta, Arceus X, Fluxus, Codex, Solara)',
+        features: '• 100% Auto Parry (Авто-парирование мяча)\n• Curve Ball & Fast Spam Ability\n• Visual Target Tracer (Траектория мяча)\n• WalkSpeed & JumpPower',
+        script_code: 'loadstring(game:HttpGet("https://raw.githubusercontent.com/JustParadozCode/LinkHive---Scripts/refs/heads/main/script.lua"))()'
+      },
+      {
+        game_name: 'Steal an Egg',
+        badge: '⭐ 9.7 | 🥚 Топ релиз',
+        executors: 'ПК и Мобильные (Delta, Arceus X, Fluxus, Codex, Solara)',
+        features: '• Auto Steal Egg (Мгновенный сбор яиц)\n• Instant Hatch & Open Eggs (Быстрое открытие)\n• WalkSpeed, Fly, Safe Zone\n• ESP на редкие яйца',
+        script_code: 'loadstring(game:HttpGet("https://raw.githubusercontent.com/JustParadozCode/LinkHive---Scripts/refs/heads/main/script.lua"))()'
+      },
+      {
+        game_name: 'Rivals',
+        badge: '⭐ 9.9 | 🎯 Hitbox & Aim',
+        executors: 'ПК (Solara, Wave) и Мобильные (Delta, Codex)',
+        features: '• Silent Aim & Triggerbot (Авто-стрельба)\n• Player Box ESP & Skeleton\n• Infinite Ammo & No Recoil (Без отдачи)\n• SpeedHack & Fly',
+        script_code: 'loadstring(game:HttpGet("https://raw.githubusercontent.com/JustParadozCode/LinkHive---Scripts/refs/heads/main/script.lua"))()'
+      },
+      {
+        game_name: 'Murder Mystery 2',
+        badge: '⭐ 9.6 | 🔪 Auto Farm',
+        executors: 'ПК и Мобильные (Delta, Arceus X, Fluxus, Codex, Solara)',
+        features: '• Auto Collect Coins (Фарм монет)\n• Role ESP (Подсветка Sheriff & Murderer)\n• Silent Aim (Мгновенное попадание)\n• Teleport to Gun / Safe Spot',
+        script_code: 'loadstring(game:HttpGet("https://raw.githubusercontent.com/JustParadozCode/LinkHive---Scripts/refs/heads/main/script.lua"))()'
+      }
+    ];
+
+    let myScripts = [];
+    let currentTab = 'my';
+
+    async function fetchUserScripts() {
       try {
         const userId = tg?.initDataUnsafe?.user?.id || 0;
         const res = await fetch(`/api/scripts?user_id=${userId}`);
-        const list = await res.json();
-
-        if (Array.isArray(list) && list.length > 0) {
-          counter.textContent = list.length;
-          container.innerHTML = '';
-
-          list.forEach(s => {
-            const item = document.createElement('div');
-            item.className = 'script-item';
-            item.innerHTML = `
-              <div class="item-header">
-                <div class="item-name">${s.game_name}</div>
-                <div class="item-badge">${s.executors || 'PC / Mobile'}</div>
-              </div>
-              <div class="item-features">${s.features || ''}</div>
-              <div class="item-code">${s.script_code}</div>
-              <button class="btn-copy" onclick="copyCode(\`${encodeURIComponent(s.script_code)}\`)">
-                Скопировать код
-              </button>
-            `;
-            container.appendChild(item);
-          });
-          return;
+        const data = await res.json();
+        if (Array.isArray(data)) {
+          myScripts = data;
         }
-      } catch (e) {}
+      } catch (e) {
+        myScripts = [];
+      }
+      document.getElementById('tab-my-count').textContent = myScripts.length;
+    }
 
-      // Empty state (NO hardcoded fake scripts!)
-      counter.textContent = '0';
-      container.innerHTML = `
-        <div class="empty-state">
-          <div class="empty-icon">📭</div>
-          <div class="empty-text">История скриптов пуста</div>
-          <div class="empty-sub">Перейдите в канал @script_drop, выберите скрипт и нажмите «Получить»</div>
-        </div>
-      `;
+    function renderScripts(list, isTopView = false) {
+      const container = document.getElementById('scripts-container');
+      const counter = document.getElementById('scripts-counter');
+      const heading = document.getElementById('section-heading');
+
+      heading.textContent = isTopView ? 'Лучшие скрипты' : 'История скриптов';
+      counter.textContent = list.length;
+      container.innerHTML = '';
+
+      if (list.length === 0) {
+        container.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-icon">📭</div>
+            <div class="empty-text">История скриптов пуста</div>
+            <div class="empty-sub">Вы ещё не получали скриптов через бота. Выберите скрипт из лучших или в канале!</div>
+            <button class="btn-empty-top" onclick="switchTab('top')">
+              ⭐ Посмотреть лучшие скрипты
+            </button>
+          </div>
+        `;
+        return;
+      }
+
+      list.forEach((s, idx) => {
+        const item = document.createElement('div');
+        item.className = 'script-item';
+        item.style.animationDelay = `${idx * 0.05}s`;
+
+        const badgeHtml = s.badge
+          ? `<div class="item-badge hot-badge">${s.badge}</div>`
+          : `<div class="item-badge">${s.executors || 'PC / Mobile'}</div>`;
+
+        item.innerHTML = `
+          <div class="item-header">
+            <div class="item-name">${s.game_name}</div>
+            ${badgeHtml}
+          </div>
+          <div class="item-features">${s.features || ''}</div>
+          <div class="item-code">${s.script_code}</div>
+          <button class="btn-copy" onclick="copyCode(\`${encodeURIComponent(s.script_code)}\`)">
+            📋 Скопировать код
+          </button>
+        `;
+        container.appendChild(item);
+      });
+    }
+
+    function switchTab(tab) {
+      currentTab = tab;
+      const tabMy = document.getElementById('tab-my');
+      const tabTop = document.getElementById('tab-top');
+
+      if (tab === 'my') {
+        tabMy.classList.add('active');
+        tabTop.classList.remove('active');
+        renderScripts(myScripts, false);
+      } else {
+        tabTop.classList.add('active');
+        tabMy.classList.remove('active');
+        renderScripts(TOP_SCRIPTS, true);
+      }
+
+      if (tg?.HapticFeedback) tg.HapticFeedback.selectionChanged();
     }
 
     window.copyCode = function(encoded) {
       const code = decodeURIComponent(encoded);
       navigator.clipboard.writeText(code).then(() => {
-        showToast('Скопировано в буфер');
+        showToast('Скопировано в буфер ✓');
       }).catch(() => {
         const ta = document.createElement('textarea');
         ta.value = code;
@@ -505,11 +877,22 @@
         ta.select();
         document.execCommand('copy');
         document.body.removeChild(ta);
-        showToast('Скопировано');
+        showToast('Скопировано ✓');
       });
     };
 
-    loadRealScripts();
+    // Initial boot
+    async function init() {
+      await fetchUserScripts();
+      // If user has history, start on 'my', else show 'top'
+      if (myScripts.length > 0) {
+        switchTab('my');
+      } else {
+        switchTab('top');
+      }
+    }
+
+    init();
   </script>
 </body>
 </html>

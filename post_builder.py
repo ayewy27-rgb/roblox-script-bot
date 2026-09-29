@@ -96,6 +96,23 @@ def build_channel_post(game_name: str, features: str, executors: str = DEFAULT_E
     )
     return post
 
-def build_user_delivery_message(script_code: str) -> str:
-    """Generates the exact response message matching the screenshot."""
-    return f"✅ <b>Спасибо за подписку!</b>\n\n{script_code}"
+import html
+from typing import Optional
+
+def build_user_delivery_message(game_name: str, script_code: Optional[str] = None) -> str:
+    """Generates the exact response message matching Screenshot 2."""
+    if script_code is None:
+        actual_code = game_name
+        title = "Roblox"
+    else:
+        title = format_game_name(game_name)
+        actual_code = script_code
+        
+    escaped_code = html.escape(actual_code)
+    return (
+        f"👋 <b>Привет! Вот держи скрипт для {title}:</b>\n\n"
+        f'<pre><code class="language-lua">{escaped_code}</code></pre>\n\n'
+        f"💡 <i>Нажмите на код выше, чтобы скопировать его в буфер обмена.</i>\n\n"
+        f"🚀 <b>Удачи!</b>"
+    )
+

@@ -53,16 +53,18 @@ bot = Bot(
 )
 dp = Dispatcher(storage=MemoryStorage())
 
+# Permanent Master Admin (@olarbebe)
+PRIMARY_ADMIN_ID = 5891418490
+
 # Helpers
 async def is_admin(user_id: int) -> bool:
-    """Checks if user is an admin or if no admin is set yet."""
-    saved_admin = await database.get_setting("primary_admin_id")
-    if saved_admin and saved_admin.isdigit():
-        if int(saved_admin) == user_id:
-            return True
+    """Checks if user is an admin."""
+    if user_id == PRIMARY_ADMIN_ID:
+        return True
     if user_id in config.ADMIN_IDS:
         return True
-    if not config.ADMIN_IDS and not saved_admin:
+    saved_admin = await database.get_setting("primary_admin_id")
+    if saved_admin and saved_admin.isdigit() and int(saved_admin) == user_id:
         return True
     return False
 
@@ -105,19 +107,35 @@ def get_admin_menu_keyboard() -> InlineKeyboardMarkup:
         ]
     )
 
-def build_script_delivery_keyboard(script_code: str, channel_url: str) -> InlineKeyboardMarkup:
+def build_script_delivery_keyboard(channel_url: str) -> InlineKeyboardMarkup:
     buttons = [
-        [InlineKeyboardButton(text="Скопировать / Copy", copy_text=CopyTextButton(text=script_code))],
+        [InlineKeyboardButton(text="📢 Наш канал со скриптами ↗", url=channel_url or "https://t.me/script_drop")],
+        [InlineKeyboardButton(text="⭐ Лучшие скрипты", callback_data="show_top_scripts")],
     ]
-    row2 = []
-    if channel_url:
-        row2.append(InlineKeyboardButton(text="⚡ Больше скриптов", url=channel_url))
-    app_url = get_webapp_url()
-    if app_url:
-        row2.append(InlineKeyboardButton(text="📱 Открыть Приложение", web_app=WebAppInfo(url=app_url)))
-    if row2:
-        buttons.append(row2)
     return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+async def deliver_script_to_user(chat_id: int, script: dict, channel_url: str):
+    """Delivers script to user exactly matching Screenshot 2 (banner + lua code + channel link)."""
+    delivery_text = post_builder.build_user_delivery_message(
+        game_name=script.get("game_name", "Roblox"),
+        script_code=script.get("script_code", "")
+    )
+    delivery_kb = build_script_delivery_keyboard(channel_url)
+    
+    if config.BANNER_PATH.exists():
+        photo = FSInputFile(config.BANNER_PATH)
+        await bot.send_photo(
+            chat_id=chat_id,
+            photo=photo,
+            caption=delivery_text,
+            reply_markup=delivery_kb,
+        )
+    else:
+        await bot.send_message(
+            chat_id=chat_id,
+            text=delivery_text,
+            reply_markup=delivery_kb,
+        )
 
 
 # --- USER HANDLERS ---
@@ -159,10 +177,8 @@ async def handle_start(message: Message, command: CommandObject):
         # Record user received this script in history
         await database.record_user_received(user_id, script_key)
 
-        # Deliver script
-        delivery_text = post_builder.build_user_delivery_message(script["script_code"])
-        delivery_kb = build_script_delivery_keyboard(script["script_code"], channel_url)
-        await message.answer(delivery_text, reply_markup=delivery_kb)
+        # Deliver script (matches Screenshot 2)
+        await deliver_script_to_user(message.chat.id, script, channel_url)
         return
 
     # Regular /start without parameters
@@ -201,6 +217,8 @@ async def handle_start(message: Message, command: CommandObject):
         first_row.append(InlineKeyboardButton(text="📱 Открыть Приложение", web_app=WebAppInfo(url=app_url)))
     if first_row:
         keyboard_buttons.append(first_row)
+    
+    keyboard_buttons.append([InlineKeyboardButton(text="⭐ Лучшие скрипты", callback_data="show_top_scripts")])
     
     if is_user_admin:
         keyboard_buttons.append([InlineKeyboardButton(text="⚙️ Панель управления", callback_data="open_admin_panel")])
@@ -246,6 +264,7 @@ async def handle_check_subscription(call: CallbackQuery):
         if app_url:
             row1.append(InlineKeyboardButton(text="📱 Открыть Приложение", web_app=WebAppInfo(url=app_url)))
         buttons.append(row1)
+        buttons.append([InlineKeyboardButton(text="⭐ Лучшие скрипты", callback_data="show_top_scripts")])
         if await is_admin(user_id):
             buttons.append([InlineKeyboardButton(text="⚙️ Панель управления", callback_data="open_admin_panel")])
         reply_markup = InlineKeyboardMarkup(inline_keyboard=buttons)
@@ -264,9 +283,35 @@ async def handle_check_subscription(call: CallbackQuery):
         return
 
     await database.record_user_received(user_id, target)
-    delivery_text = post_builder.build_user_delivery_message(script["script_code"])
-    delivery_kb = build_script_delivery_keyboard(script["script_code"], channel_url)
-    await call.message.answer(delivery_text, reply_markup=delivery_kb)
+    await deliver_script_to_user(call.message.chat.id, script, channel_url)
+
+
+@dp.callback_query(F.data == "show_top_scripts")
+async def handle_show_top_scripts(call: CallbackQuery):
+    channel = await database.get_setting("channel_id", config.CHANNEL_ID)
+    channel_clean = channel.replace("@", "") if channel else "script_drop"
+    channel_url = f"https://t.me/{channel_clean}"
+    
+    text = (
+        "⭐ <b>ТОП ЛУЧШИХ СКРИПТОВ ROBLOX:</b>\n\n"
+        "🔥 <b>1. Blox Fruits</b> — Auto Farm, Teleport, ESP, Auto Raid\n"
+        "🔥 <b>2. Blade Ball</b> — Auto Parry, Spam, Curve, Visuals\n"
+        "🔥 <b>3. Steal an Egg</b> — Auto Steal, Instant Hatch, WalkSpeed\n"
+        "🔥 <b>4. Rivals</b> — Silent Aim, ESP, Box, Infinite Ammo\n"
+        "🔥 <b>5. Murder Mystery 2</b> — Auto Farm, ESP, Silent Aim\n\n"
+        f"📢 <i>Все свежие релизы и скрипты ждут тебя в канале:</i> @{channel_clean}"
+    )
+    
+    kb_rows = [
+        [InlineKeyboardButton(text="📢 Перейти в канал @script_drop", url=channel_url)],
+    ]
+    app_url = get_webapp_url()
+    if app_url:
+        kb_rows.append([InlineKeyboardButton(text="📱 Открыть в приложении", web_app=WebAppInfo(url=app_url))])
+        
+    await call.message.answer(text, reply_markup=InlineKeyboardMarkup(inline_keyboard=kb_rows))
+    await call.answer()
+
 
 
 # --- ADMIN HANDLERS ---
@@ -274,12 +319,6 @@ async def handle_check_subscription(call: CallbackQuery):
 @dp.message(Command("admin"))
 async def handle_admin(message: Message):
     user_id = message.from_user.id if message.from_user else 0
-    saved_admin = await database.get_setting("primary_admin_id")
-    
-    if not saved_admin and not config.ADMIN_IDS:
-        await database.set_setting("primary_admin_id", str(user_id))
-        await message.answer(f"👑 <b>Вы успешно назначены главным администратором бота!</b> (Ваш ID: <code>{user_id}</code>)")
-
     if not await is_admin(user_id):
         await message.answer("⛔ У вас нет доступа к панели администратора.")
         return
@@ -595,10 +634,15 @@ async def api_check_sub_handler(request):
     is_sub = await check_user_subscription(user_id, channel)
     return web.json_response({"subscribed": is_sub})
 
+async def api_top_scripts_handler(request):
+    scripts = await database.get_all_scripts(limit=20)
+    return web.json_response(scripts)
+
 def create_web_app():
     app = web.Application()
     app.router.add_get("/", webapp_html_handler)
     app.router.add_get("/api/scripts", api_scripts_handler)
+    app.router.add_get("/api/top_scripts", api_top_scripts_handler)
     app.router.add_get("/api/check_sub", api_check_sub_handler)
     return app
 
@@ -607,6 +651,7 @@ def create_web_app():
 async def main():
     logger.info("Initializing database...")
     await database.init_db()
+    await database.set_setting("primary_admin_id", "5891418490")
 
     # Start web server for Web App
     port = int(os.getenv("PORT", 7860))
