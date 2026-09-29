@@ -18,6 +18,15 @@ async def init_db():
             )
         """)
         await db.execute("""
+            CREATE TABLE IF NOT EXISTS user_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                script_key TEXT NOT NULL,
+                received_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(user_id, script_key)
+            )
+        """)
+        await db.execute("""
             CREATE TABLE IF NOT EXISTS settings (
                 key TEXT PRIMARY KEY,
                 value TEXT NOT NULL
@@ -31,6 +40,36 @@ async def init_db():
                 await db.execute(f"ALTER TABLE scripts ADD COLUMN executors TEXT DEFAULT '{DEFAULT_EXECUTORS}'")
                 
         await db.commit()
+
+async def record_user_received(user_id: int, script_key: str):
+    """Records that this specific user opened/received this script."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            "INSERT INTO user_history (user_id, script_key) VALUES (?, ?) ON CONFLICT(user_id, script_key) DO UPDATE SET received_at = CURRENT_TIMESTAMP",
+            (user_id, script_key)
+        )
+        await db.commit()
+
+async def get_user_scripts(user_id: int) -> List[Dict[str, Any]]:
+    """Returns only scripts that the user actually opened/received."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        if user_id and user_id > 0:
+            query = """
+                SELECT s.* FROM scripts s
+                JOIN user_history h ON s.script_key = h.script_key
+                WHERE h.user_id = ?
+                ORDER BY h.received_at DESC
+            """
+            async with db.execute(query, (user_id,)) as cursor:
+                rows = await cursor.fetchall()
+                if rows:
+                    return [dict(r) for r in rows]
+
+        # Fallback to all published scripts if user hasn't received any yet
+        async with db.execute("SELECT * FROM scripts ORDER BY id DESC LIMIT 50") as cursor:
+            rows = await cursor.fetchall()
+            return [dict(r) for r in rows]
 
 async def add_script(game_name: str, features: str, script_code: str, executors: str = DEFAULT_EXECUTORS) -> str:
     async with aiosqlite.connect(DB_PATH) as db:
@@ -68,12 +107,6 @@ async def get_all_scripts(limit: int = 50) -> List[Dict[str, Any]]:
         ) as cursor:
             rows = await cursor.fetchall()
             return [dict(r) for r in rows]
-
-async def delete_script(script_key: str) -> bool:
-    async with aiosqlite.connect(DB_PATH) as db:
-        cursor = await db.execute("DELETE FROM scripts WHERE script_key = ?", (script_key,))
-        await db.commit()
-        return cursor.rowcount > 0
 
 async def get_setting(key: str, default: str = "") -> str:
     async with aiosqlite.connect(DB_PATH) as db:

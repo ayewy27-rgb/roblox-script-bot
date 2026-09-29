@@ -90,6 +90,12 @@ async def check_user_subscription(user_id: int, channel: str) -> bool:
         logger.error(f"Unexpected error in subscription check: {e}")
         return False
 
+def get_webapp_url() -> str:
+    url = os.getenv("RENDER_EXTERNAL_URL") or os.getenv("WEBAPP_URL") or getattr(config, "WEBAPP_URL", "")
+    if not url or "vercel.app" in url:
+        return "https://roblox-script-bot.onrender.com"
+    return url
+
 def get_admin_menu_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
@@ -99,14 +105,7 @@ def get_admin_menu_keyboard() -> InlineKeyboardMarkup:
         ]
     )
 
-def get_webapp_url() -> str:
-    url = os.getenv("RENDER_EXTERNAL_URL") or os.getenv("WEBAPP_URL") or getattr(config, "WEBAPP_URL", "")
-    if not url or "vercel.app" in url:
-        return "https://roblox-script-bot.onrender.com"
-    return url
-
 def build_script_delivery_keyboard(script_code: str, channel_url: str) -> InlineKeyboardMarkup:
-    """Creates the exact buttons requested: Copy, Channel, and Open Mini App."""
     buttons = [
         [InlineKeyboardButton(text="Скопировать / Copy", copy_text=CopyTextButton(text=script_code))],
     ]
@@ -157,7 +156,10 @@ async def handle_start(message: Message, command: CommandObject):
             )
             return
 
-        # User is subscribed -> send the exact format
+        # Record user received this script in history
+        await database.record_user_received(user_id, script_key)
+
+        # Deliver script
         delivery_text = post_builder.build_user_delivery_message(script["script_code"])
         delivery_kb = build_script_delivery_keyboard(script["script_code"], channel_url)
         await message.answer(delivery_text, reply_markup=delivery_kb)
@@ -184,7 +186,7 @@ async def handle_start(message: Message, command: CommandObject):
         return
 
     welcome_text = (
-        "👋 <b>Привет! Добро пожаловать в Roblox Script Bot! ⚡</b>\n\n"
+        "👋 <b>Привет! Добро пожаловать в Script Drop! ⚡</b>\n\n"
         "Здесь ты можешь получать актуальные и проверенные скрипты для Roblox.\n\n"
         "📌 <i>Все свежие релизы публикуются в нашем канале. "
         "Переходи, выбирай нужную игру и жми «Получить скрипт»!</i>"
@@ -233,7 +235,7 @@ async def handle_check_subscription(call: CallbackQuery):
 
     if target == "welcome":
         welcome_text = (
-            "👋 <b>Привет! Добро пожаловать в Roblox Script Bot! ⚡</b>\n\n"
+            "👋 <b>Привет! Добро пожаловать в Script Drop! ⚡</b>\n\n"
             "Здесь ты можешь получать актуальные и проверенные скрипты для Roblox.\n\n"
             "📌 <i>Все свежие релизы публикуются в нашем канале. "
             "Переходи, выбирай нужную игру и жми «Получить скрипт»!</i>"
@@ -261,6 +263,7 @@ async def handle_check_subscription(call: CallbackQuery):
         await call.message.answer("⚠️ Скрипт не найден или был удалён.")
         return
 
+    await database.record_user_received(user_id, target)
     delivery_text = post_builder.build_user_delivery_message(script["script_code"])
     delivery_kb = build_script_delivery_keyboard(script["script_code"], channel_url)
     await call.message.answer(delivery_text, reply_markup=delivery_kb)
@@ -283,13 +286,14 @@ async def handle_admin(message: Message):
 
     channel = await database.get_setting("channel_id", config.CHANNEL_ID)
     channel_display = f"<code>{channel}</code>" if channel else "<i>Не привязан</i>"
+    kb = get_admin_menu_keyboard()
 
     text = (
-        "👑 <b>Панель администратора RobloxScript</b>\n\n"
+        "👑 <b>Панель администратора Script Drop</b>\n\n"
         f"📢 Текущий канал для постов: {channel_display}\n\n"
         "Выберите действие в меню ниже:"
     )
-    await message.answer(text, reply_markup=get_admin_menu_keyboard())
+    await message.answer(text, reply_markup=kb)
 
 @dp.callback_query(F.data == "open_admin_panel")
 async def callback_admin_panel(call: CallbackQuery):
@@ -300,7 +304,7 @@ async def callback_admin_panel(call: CallbackQuery):
     await handle_admin(call.message)
     await call.answer()
 
-# --- FSM: POST CREATION (WITH EXECUTORS SELECTION) ---
+# --- FSM: MANUAL POST CREATION ---
 
 @dp.callback_query(F.data == "admin_create_post")
 async def start_create_post(call: CallbackQuery, state: FSMContext):
@@ -313,8 +317,7 @@ async def start_create_post(call: CallbackQuery, state: FSMContext):
     
     await call.message.answer(
         "🎮 <b>Шаг 1 из 4: Название игры</b>\n\n"
-        "Напишите название игры (например: <code>steal an egg</code> или <code>blade ball</code>).\n"
-        "<i>Бот автоматически исправит регистр и оформит название красиво!</i>",
+        "Напишите название игры (например: <code>steal an egg</code> или <code>blade ball</code>):",
         reply_markup=cancel_kb,
     )
     await call.answer()
@@ -340,8 +343,7 @@ async def process_game_name(message: Message, state: FSMContext):
     await message.answer(
         f"✅ Игра определена: <b>{formatted_name}</b>\n\n"
         "🛠 <b>Шаг 2 из 4: Функционал скрипта</b>\n\n"
-        "Напишите функции через запятую (например: <code>есп, авто фарм, скорость, телепорт</code>)\n"
-        "Или нажмите кнопку ниже, чтобы использовать стандартный набор:",
+        "Напишите функции через запятую или нажмите кнопку ниже:",
         reply_markup=kb,
     )
 
@@ -369,8 +371,7 @@ async def prompt_for_executors(message: Message, state: FSMContext):
         ]
     )
     await message.answer(
-        "📱 <b>Шаг 3 из 4: На каких экзекуторах работает скрипт?</b>\n\n"
-        "Выберите готовый вариант ниже или отправьте текстом свой список поддерживаемых инжекторов:",
+        "📱 <b>Шаг 3 из 4: На каких экзекуторах работает скрипт?</b>",
         reply_markup=kb,
     )
 
@@ -391,8 +392,7 @@ async def process_executor_choice(call: CallbackQuery, state: FSMContext):
     await call.message.answer(
         f"✅ Поддержка: <b>{chosen_text}</b>\n\n"
         "📜 <b>Шаг 4 из 4: Ссылка или код скрипта</b>\n\n"
-        "Отправьте команду запуска (loadstring) или ссылку, например:\n"
-        "<code>loadstring(game:HttpGet(\"https://raw.githubusercontent.com/...\"))()</code>",
+        "Отправьте команду запуска (loadstring) или ссылку:",
         reply_markup=cancel_kb,
     )
     await call.answer()
@@ -406,9 +406,7 @@ async def process_custom_executors(message: Message, state: FSMContext):
     cancel_kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="❌ Отмена", callback_data="cancel_fsm")]])
     await message.answer(
         f"✅ Поддержка: <b>{custom}</b>\n\n"
-        "📜 <b>Шаг 4 из 4: Ссылка или код скрипта</b>\n\n"
-        "Отправьте команду запуска (loadstring) или ссылку, например:\n"
-        "<code>loadstring(game:HttpGet(\"https://raw.githubusercontent.com/...\"))()</code>",
+        "📜 <b>Шаг 4 из 4: Ссылка или код скрипта</b>:",
         reply_markup=cancel_kb,
     )
 
@@ -424,7 +422,6 @@ async def process_script_code(message: Message, state: FSMContext):
     features = data.get("features", post_builder.DEFAULT_FEATURES)
     executors = data.get("executors", post_builder.DEFAULT_EXECUTORS)
 
-    # Save to SQLite Database
     script_key = await database.add_script(
         game_name=game_name,
         features=features,
@@ -433,13 +430,11 @@ async def process_script_code(message: Message, state: FSMContext):
     )
     await state.clear()
 
-    # Generate Channel Post text
     channel_post_text = post_builder.build_channel_post(game_name, features, executors)
     bot_info = await bot.get_me()
     bot_user = bot_info.username or config.BOT_USERNAME
     deep_link = f"https://t.me/{bot_user}?start={script_key}"
 
-    # Preview keyboard
     action_kb = InlineKeyboardMarkup(
         inline_keyboard=[
             [InlineKeyboardButton(text="🚀 Получить скрипт (Ссылка)", url=deep_link)],
@@ -448,16 +443,11 @@ async def process_script_code(message: Message, state: FSMContext):
         ]
     )
 
-    await message.answer("🎉 <b>Скрипт успешно сохранён в базе данных!</b>\nВот как выглядит готовый пост для канала:")
+    await message.answer("🎉 <b>Скрипт успешно сохранён в базе данных!</b>")
 
-    # Send post preview with banner
     if config.BANNER_PATH.exists():
         photo = FSInputFile(config.BANNER_PATH)
-        await message.answer_photo(
-            photo=photo,
-            caption=channel_post_text,
-            reply_markup=action_kb,
-        )
+        await message.answer_photo(photo=photo, caption=channel_post_text, reply_markup=action_kb)
     else:
         await message.answer(channel_post_text, reply_markup=action_kb)
 
@@ -477,7 +467,7 @@ async def publish_to_channel(call: CallbackQuery):
 
     channel = await database.get_setting("channel_id", config.CHANNEL_ID)
     if not channel:
-        await call.answer("⚠️ Канал ещё не привязан! Сначала привяжите канал в меню админа.", show_alert=True)
+        await call.answer("⚠️ Канал ещё не привязан!", show_alert=True)
         return
 
     executors = script.get("executors", post_builder.DEFAULT_EXECUTORS)
@@ -495,25 +485,13 @@ async def publish_to_channel(call: CallbackQuery):
     try:
         if config.BANNER_PATH.exists():
             photo = FSInputFile(config.BANNER_PATH)
-            await bot.send_photo(
-                chat_id=channel,
-                photo=photo,
-                caption=post_text,
-                reply_markup=post_kb,
-            )
+            await bot.send_photo(chat_id=channel, photo=photo, caption=post_text, reply_markup=post_kb)
         else:
-            await bot.send_message(
-                chat_id=channel,
-                text=post_text,
-                reply_markup=post_kb,
-            )
+            await bot.send_message(chat_id=channel, text=post_text, reply_markup=post_kb)
         await call.answer("✅ Пост успешно опубликован в канал!", show_alert=True)
     except Exception as e:
         logger.error(f"Failed to post to channel: {e}")
-        await call.answer(
-            f"❌ Ошибка публикации: {e}\n\nУбедитесь, что бот добавлен в канал администратором с правом публикации сообщений!",
-            show_alert=True,
-        )
+        await call.answer(f"❌ Ошибка публикации: {e}", show_alert=True)
 
 # --- CHANNEL SETUP ---
 
@@ -528,8 +506,7 @@ async def start_channel_setup(call: CallbackQuery, state: FSMContext):
     
     await call.message.answer(
         "📢 <b>Привязка Telegram-канала</b>\n\n"
-        "1. Добавьте бота <b>@" + (config.BOT_USERNAME) + "</b> в свой канал как <b>Администратора</b> (с правами на публикацию сообщений).\n"
-        "2. Отправьте сюда юзернейм канала (например: <code>@script_drop</code>) или перешлите любой пост из него сюда:",
+        "Отправьте юзернейм канала (например: <code>@script_drop</code>):",
         reply_markup=cancel_kb,
     )
     await call.answer()
@@ -537,7 +514,6 @@ async def start_channel_setup(call: CallbackQuery, state: FSMContext):
 @dp.message(ChannelSetup.waiting_for_channel)
 async def process_channel_input(message: Message, state: FSMContext):
     channel_identifier = None
-    
     if message.forward_from_chat and message.forward_from_chat.type == "channel":
         channel_identifier = str(message.forward_from_chat.id)
     elif message.text:
@@ -551,12 +527,8 @@ async def process_channel_input(message: Message, state: FSMContext):
 
     await database.set_setting("channel_id", channel_identifier)
     await state.clear()
-    
-    await message.answer(
-        f"✅ Канал успешно привязан: <code>{channel_identifier}</code>!\n"
-        "Теперь при создании постов вы сможете сразу публиковать их одной кнопкой.",
-        reply_markup=get_admin_menu_keyboard(),
-    )
+    kb = get_admin_menu_keyboard()
+    await message.answer(f"✅ Канал успешно привязан: <code>{channel_identifier}</code>!", reply_markup=kb)
 
 # --- SCRIPTS LIST ---
 
@@ -574,13 +546,12 @@ async def list_scripts_handler(call: CallbackQuery):
     bot_info = await bot.get_me()
     bot_user = bot_info.username or config.BOT_USERNAME
 
-    text_lines = ["📋 <b>Последние 10 скриптов:</b>\n"]
+    text_lines = ["📋 <b>Последние скрипты:</b>\n"]
     for s in scripts:
         link = f"https://t.me/{bot_user}?start={s['script_key']}"
         text_lines.append(
             f"🔹 <b>{s['game_name']}</b> (Ключ: <code>{s['script_key']}</code>)\n"
-            f"📱 Поддержка: <i>{s.get('executors', 'Все')}</i>\n"
-            f"🔗 <a href=\"{link}\">Ссылка на скрипт</a>\n"
+            f"🔗 <a href=\"{link}\">Ссылка</a>\n"
         )
 
     kb = InlineKeyboardMarkup(
@@ -607,7 +578,12 @@ async def webapp_html_handler(request):
     return web.Response(text="Mini App HTML not found", status=404)
 
 async def api_scripts_handler(request):
-    scripts = await database.get_all_scripts(limit=50)
+    try:
+        user_id = int(request.query.get("user_id", 0))
+    except (ValueError, TypeError):
+        user_id = 0
+    # Returns only real scripts received by this user (or real published scripts)
+    scripts = await database.get_user_scripts(user_id)
     return web.json_response(scripts)
 
 async def api_check_sub_handler(request):
@@ -632,7 +608,7 @@ async def main():
     logger.info("Initializing database...")
     await database.init_db()
 
-    # Start web server for Web App (supports HuggingFace Spaces and local)
+    # Start web server for Web App
     port = int(os.getenv("PORT", 7860))
     app = create_web_app()
     runner = web.AppRunner(app)

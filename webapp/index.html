@@ -3,25 +3,19 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
-  <title>RobloxScript Hub Mini App</title>
+  <title>Script Drop</title>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800;900&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg: #070a0e;
-      --card-bg: rgba(14, 23, 20, 0.72);
-      --card-border: rgba(16, 185, 129, 0.28);
-      --accent: #00e676;
-      --accent-glow: rgba(0, 230, 118, 0.4);
-      --accent-dark: #008744;
-      --text: #f0fdf4;
-      --text-muted: #86a796;
+      --bg: #0e0e11;
+      --card-bg: #18181c;
+      --card-border: #26262b;
+      --text: #ffffff;
+      --text-muted: #8e8e93;
+      --accent: #22c55e;
       --danger: #ef4444;
-      --danger-glow: rgba(239, 68, 68, 0.4);
-      --badge-color: #00e676;
-      --badge-glow: rgba(0, 230, 118, 0.5);
+      --btn-bg: #242429;
+      --btn-hover: #2c2c33;
     }
 
     * {
@@ -35,494 +29,309 @@
     body {
       background: var(--bg);
       color: var(--text);
-      font-family: 'Rajdhani', sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
       min-height: 100vh;
-      overflow-x: hidden;
-      position: relative;
+      padding: 16px;
       padding-bottom: 40px;
     }
 
-    /* Ambient Background Glow */
-    #bg-canvas {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      z-index: 0;
-      pointer-events: none;
-      opacity: 0.6;
-    }
-
-    .ambient-glow {
-      position: fixed;
-      top: -100px;
-      left: 50%;
-      transform: translateX(-50%);
-      width: 500px;
-      height: 350px;
-      background: radial-gradient(circle, var(--accent-glow) 0%, transparent 70%);
-      filter: blur(80px);
-      z-index: 0;
-      pointer-events: none;
-      transition: background 0.5s ease;
-    }
-
     .container {
-      position: relative;
-      z-index: 1;
-      max-width: 520px;
+      max-width: 480px;
       margin: 0 auto;
-      padding: 16px;
     }
 
-    /* Header */
-    .header {
+    /* Top Bar */
+    .top-bar {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 12px 16px;
-      background: var(--card-bg);
-      backdrop-filter: blur(20px);
-      -webkit-backdrop-filter: blur(20px);
-      border: 1px solid var(--card-border);
-      border-radius: 20px;
-      margin-bottom: 16px;
-      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
-    }
-
-    .brand {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
-
-    .brand-icon {
-      width: 44px;
-      height: 44px;
-      border-radius: 14px;
-      background: linear-gradient(135deg, rgba(0, 230, 118, 0.2), rgba(0, 135, 68, 0.4));
-      border: 1.5px solid var(--accent);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 24px;
-      box-shadow: 0 0 16px var(--accent-glow);
-    }
-
-    .brand-title {
-      font-family: 'Orbitron', sans-serif;
-      font-size: 18px;
-      font-weight: 800;
-      letter-spacing: 0.5px;
-      color: #fff;
-    }
-
-    .brand-subtitle {
-      font-size: 12px;
-      color: var(--accent);
-      text-transform: uppercase;
-      letter-spacing: 1.5px;
-      font-weight: 600;
-    }
-
-    .user-pill {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      background: rgba(255, 255, 255, 0.05);
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      padding: 6px 12px;
-      border-radius: 30px;
-      font-size: 13px;
-      font-weight: 600;
-    }
-
-    /* Channel Action Card */
-    .channel-hero {
-      position: relative;
-      background: linear-gradient(135deg, rgba(0, 230, 118, 0.12), rgba(6, 78, 59, 0.25));
-      border: 1px solid var(--accent);
-      border-radius: 22px;
-      padding: 20px;
       margin-bottom: 20px;
-      box-shadow: 0 0 35px var(--accent-glow);
-      overflow: hidden;
+      padding-top: 4px;
     }
 
-    .channel-hero::before {
-      content: '';
-      position: absolute;
-      top: -50%;
-      right: -30%;
-      width: 200px;
-      height: 200px;
-      background: radial-gradient(circle, var(--accent-glow), transparent 70%);
-      pointer-events: none;
-    }
-
-    .channel-hero-content {
-      position: relative;
-      z-index: 2;
-    }
-
-    .channel-hero-tag {
-      display: inline-block;
-      background: var(--accent);
-      color: #052e16;
-      font-family: 'Orbitron', sans-serif;
-      font-size: 11px;
-      font-weight: 800;
-      padding: 4px 10px;
-      border-radius: 6px;
-      letter-spacing: 1px;
-      margin-bottom: 10px;
-    }
-
-    .channel-hero-title {
-      font-family: 'Orbitron', sans-serif;
+    .app-title {
       font-size: 20px;
-      font-weight: 900;
-      color: #fff;
-      margin-bottom: 6px;
-    }
-
-    .channel-hero-desc {
-      font-size: 14px;
-      color: var(--text-muted);
-      margin-bottom: 16px;
-    }
-
-    .btn-main-channel {
-      width: 100%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 10px;
-      background: linear-gradient(135deg, var(--accent), #00b359);
-      color: #03200f;
-      font-family: 'Orbitron', sans-serif;
-      font-size: 15px;
-      font-weight: 800;
-      padding: 14px;
-      border-radius: 14px;
-      border: none;
-      cursor: pointer;
-      text-decoration: none;
-      box-shadow: 0 8px 24px var(--accent-glow);
-      transition: all 0.2s ease;
-    }
-
-    .btn-main-channel:active {
-      transform: scale(0.98);
-      filter: brightness(1.1);
-    }
-
-    /* Subscription Status Card */
-    .sub-card {
-      background: var(--card-bg);
-      backdrop-filter: blur(20px);
-      -webkit-backdrop-filter: blur(20px);
-      border: 1px solid var(--card-border);
-      border-radius: 22px;
-      padding: 20px;
-      margin-bottom: 22px;
-      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
-    }
-
-    .sub-card-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin-bottom: 16px;
-    }
-
-    .sub-title {
-      font-family: 'Orbitron', sans-serif;
-      font-size: 16px;
-      font-weight: 800;
-      color: #fff;
-    }
-
-    .color-picker {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-    }
-
-    .color-dot {
-      width: 18px;
-      height: 18px;
-      border-radius: 50%;
-      cursor: pointer;
-      border: 2px solid transparent;
-      transition: transform 0.2s;
-    }
-
-    .color-dot.active {
-      transform: scale(1.2);
-      border-color: #fff;
-    }
-
-    .status-badge-container {
-      display: flex;
-      align-items: center;
-      gap: 16px;
-      padding: 16px;
-      border-radius: 18px;
-      background: rgba(0, 0, 0, 0.35);
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      margin-bottom: 16px;
-      transition: all 0.3s ease;
-    }
-
-    .badge-icon-box {
-      width: 58px;
-      height: 58px;
-      border-radius: 18px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 28px;
-      flex-shrink: 0;
-      transition: all 0.3s ease;
-      box-shadow: 0 0 24px var(--badge-glow);
-    }
-
-    .badge-icon-box.success {
-      background: linear-gradient(135deg, rgba(0, 230, 118, 0.25), rgba(0, 135, 68, 0.45));
-      border: 2px solid var(--badge-color);
-      color: var(--badge-color);
-    }
-
-    .badge-icon-box.fail {
-      background: linear-gradient(135deg, rgba(239, 68, 68, 0.25), rgba(153, 27, 27, 0.45));
-      border: 2px solid var(--danger);
-      color: var(--danger);
-      box-shadow: 0 0 24px var(--danger-glow);
-    }
-
-    .status-info h4 {
-      font-family: 'Orbitron', sans-serif;
-      font-size: 16px;
       font-weight: 700;
+      letter-spacing: -0.4px;
+    }
+
+    .user-badge {
+      font-size: 13px;
+      color: var(--text-muted);
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      padding: 6px 12px;
+      border-radius: 20px;
+    }
+
+    /* Channel Banner */
+    .channel-banner {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 16px;
+      padding: 16px;
+      margin-bottom: 16px;
+    }
+
+    .channel-title {
+      font-size: 16px;
+      font-weight: 600;
       margin-bottom: 4px;
     }
 
-    .status-info p {
+    .channel-desc {
       font-size: 13px;
       color: var(--text-muted);
-      line-height: 1.3;
+      margin-bottom: 14px;
+      line-height: 1.4;
     }
 
-    .sub-actions {
-      display: flex;
-      gap: 10px;
-    }
-
-    .btn-secondary {
-      flex: 1;
-      padding: 12px;
-      background: rgba(255, 255, 255, 0.06);
-      border: 1px solid rgba(255, 255, 255, 0.15);
-      border-radius: 12px;
-      color: #fff;
-      font-family: 'Orbitron', sans-serif;
-      font-size: 13px;
-      font-weight: 700;
-      cursor: pointer;
+    .btn-channel {
       display: flex;
       align-items: center;
       justify-content: center;
       gap: 8px;
+      width: 100%;
+      background: #ffffff;
+      color: #000000;
+      font-size: 14px;
+      font-weight: 600;
+      padding: 12px;
+      border-radius: 12px;
       text-decoration: none;
-      transition: all 0.2s;
+      border: none;
+      cursor: pointer;
+      transition: opacity 0.15s;
     }
 
-    .btn-secondary:active {
-      background: rgba(255, 255, 255, 0.12);
-      transform: scale(0.98);
+    .btn-channel:active {
+      opacity: 0.85;
     }
 
-    /* Section: History of Scripts */
-    .section-header {
+    /* Subscription Card */
+    .sub-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 16px;
+      padding: 16px;
+      margin-bottom: 24px;
+    }
+
+    .sub-header {
       display: flex;
       align-items: center;
       justify-content: space-between;
       margin-bottom: 12px;
-      padding: 0 4px;
     }
 
-    .section-title {
-      font-family: 'Orbitron', sans-serif;
-      font-size: 18px;
-      font-weight: 800;
-      color: #fff;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-
-    .search-box {
-      position: relative;
-      margin-bottom: 16px;
-    }
-
-    .search-input {
-      width: 100%;
-      background: var(--card-bg);
-      border: 1px solid var(--card-border);
-      padding: 12px 16px 12px 42px;
-      border-radius: 14px;
-      color: #fff;
-      font-family: 'Rajdhani', sans-serif;
-      font-size: 15px;
+    .sub-label {
+      font-size: 12px;
       font-weight: 600;
-      outline: none;
-      transition: border-color 0.2s;
-    }
-
-    .search-input:focus {
-      border-color: var(--accent);
-      box-shadow: 0 0 15px var(--accent-glow);
-    }
-
-    .search-icon {
-      position: absolute;
-      left: 14px;
-      top: 50%;
-      transform: translateY(-50%);
       color: var(--text-muted);
-      font-size: 16px;
-    }
-
-    /* Script Cards */
-    .scripts-list {
-      display: flex;
-      flex-direction: column;
-      gap: 14px;
-    }
-
-    .script-card {
-      background: var(--card-bg);
-      backdrop-filter: blur(20px);
-      -webkit-backdrop-filter: blur(20px);
-      border: 1px solid var(--card-border);
-      border-radius: 18px;
-      padding: 16px;
-      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
-      transition: transform 0.2s, border-color 0.2s;
-    }
-
-    .script-card:hover {
-      border-color: var(--accent);
-      transform: translateY(-2px);
-    }
-
-    .card-top {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin-bottom: 10px;
-    }
-
-    .game-name {
-      font-family: 'Orbitron', sans-serif;
-      font-size: 17px;
-      font-weight: 800;
-      color: #fff;
-    }
-
-    .executors-badge {
-      background: rgba(0, 230, 118, 0.15);
-      border: 1px solid var(--accent);
-      color: var(--accent);
-      font-size: 11px;
-      font-weight: 700;
-      padding: 3px 8px;
-      border-radius: 20px;
       text-transform: uppercase;
       letter-spacing: 0.5px;
     }
 
-    .features-chips {
+    .sub-status {
       display: flex;
-      flex-wrap: wrap;
-      gap: 6px;
+      align-items: center;
+      gap: 12px;
+      padding: 12px;
+      background: rgba(0, 0, 0, 0.25);
+      border-radius: 12px;
       margin-bottom: 12px;
     }
 
-    .chip {
-      background: rgba(255, 255, 255, 0.05);
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      padding: 3px 8px;
-      border-radius: 6px;
+    .status-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      font-weight: 700;
+    }
+
+    .status-icon.active {
+      background: rgba(34, 197, 94, 0.15);
+      color: var(--accent);
+      border: 1px solid rgba(34, 197, 94, 0.3);
+    }
+
+    .status-icon.inactive {
+      background: rgba(239, 68, 68, 0.15);
+      color: var(--danger);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+    }
+
+    .status-text h4 {
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 2px;
+    }
+
+    .status-text p {
       font-size: 12px;
-      color: #a7f3d0;
+      color: var(--text-muted);
+    }
+
+    .sub-buttons {
+      display: flex;
+      gap: 8px;
+    }
+
+    .btn-sub {
+      flex: 1;
+      background: var(--btn-bg);
+      color: #fff;
+      font-size: 13px;
+      font-weight: 500;
+      padding: 10px;
+      border-radius: 10px;
+      border: 1px solid var(--card-border);
+      cursor: pointer;
+      text-align: center;
+      text-decoration: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+
+    .btn-sub:active {
+      background: var(--btn-hover);
+    }
+
+    /* History Section */
+    .section-title {
+      font-size: 15px;
+      font-weight: 600;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .scripts-list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .script-item {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 14px;
+      padding: 14px;
+    }
+
+    .item-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+    }
+
+    .item-name {
+      font-size: 15px;
       font-weight: 600;
     }
 
-    .code-preview {
-      background: rgba(0, 0, 0, 0.55);
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      border-radius: 10px;
-      padding: 10px 12px;
-      font-family: 'Consolas', monospace;
-      font-size: 12px;
-      color: #94a3b8;
-      overflow-x: hidden;
-      white-space: nowrap;
-      text-overflow: ellipsis;
-      margin-bottom: 12px;
+    .item-badge {
+      font-size: 11px;
+      color: var(--text-muted);
+      background: rgba(255, 255, 255, 0.06);
+      padding: 3px 8px;
+      border-radius: 6px;
     }
 
-    .card-actions {
-      display: flex;
-      gap: 10px;
+    .item-features {
+      font-size: 12px;
+      color: var(--text-muted);
+      line-height: 1.5;
+      margin-bottom: 10px;
+      white-space: pre-line;
+    }
+
+    .item-code {
+      background: #09090b;
+      border: 1px solid #1e1e24;
+      border-radius: 8px;
+      padding: 8px 10px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 11px;
+      color: #94a3b8;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      margin-bottom: 10px;
     }
 
     .btn-copy {
-      flex: 1;
-      padding: 10px;
-      background: linear-gradient(135deg, rgba(0, 230, 118, 0.2), rgba(0, 135, 68, 0.3));
-      border: 1px solid var(--accent);
-      border-radius: 10px;
-      color: #fff;
-      font-family: 'Orbitron', sans-serif;
+      width: 100%;
+      background: var(--btn-bg);
+      color: #ffffff;
       font-size: 13px;
-      font-weight: 700;
+      font-weight: 500;
+      padding: 9px;
+      border-radius: 9px;
+      border: 1px solid var(--card-border);
       cursor: pointer;
       display: flex;
       align-items: center;
       justify-content: center;
       gap: 6px;
-      transition: all 0.2s;
+      transition: background 0.15s;
     }
 
     .btn-copy:active {
-      transform: scale(0.97);
-      background: var(--accent);
-      color: #000;
+      background: var(--btn-hover);
     }
 
-    /* Toast Notification */
+    /* Empty State */
+    .empty-state {
+      text-align: center;
+      padding: 40px 20px;
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 14px;
+      color: var(--text-muted);
+    }
+
+    .empty-icon {
+      font-size: 32px;
+      margin-bottom: 8px;
+    }
+
+    .empty-text {
+      font-size: 14px;
+      font-weight: 500;
+      margin-bottom: 4px;
+      color: #fff;
+    }
+
+    .empty-sub {
+      font-size: 12px;
+    }
+
+    /* Toast */
     #toast {
       position: fixed;
       bottom: 24px;
       left: 50%;
-      transform: translateX(-50%) translateY(100px);
-      background: #00e676;
-      color: #03200f;
-      padding: 12px 24px;
-      border-radius: 30px;
-      font-family: 'Orbitron', sans-serif;
+      transform: translateX(-50%) translateY(70px);
+      background: #ffffff;
+      color: #000000;
+      padding: 10px 18px;
+      border-radius: 20px;
       font-size: 13px;
-      font-weight: 800;
-      box-shadow: 0 10px 30px rgba(0, 230, 118, 0.5);
-      z-index: 1000;
+      font-weight: 600;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
       opacity: 0;
-      transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+      transition: all 0.25s ease;
       pointer-events: none;
+      z-index: 1000;
     }
 
     #toast.show {
@@ -533,352 +342,174 @@
 </head>
 <body>
 
-  <canvas id="bg-canvas"></canvas>
-  <div class="ambient-glow" id="ambient-glow"></div>
-
   <div class="container">
     
-    <!-- Top Header -->
-    <header class="header">
-      <div class="brand">
-        <div class="brand-icon">💎</div>
-        <div>
-          <div class="brand-title">SCRIPT DROP</div>
-          <div class="brand-subtitle">ROBLOX SCRIPTS HUB</div>
-        </div>
-      </div>
-      <div class="user-pill" id="user-display">
-        <span>👤</span>
-        <span id="username-text">Игрок</span>
-      </div>
-    </header>
-
-    <!-- Main Channel Hero -->
-    <div class="channel-hero">
-      <div class="channel-hero-content">
-        <span class="channel-hero-tag">ОФИЦИАЛЬНЫЙ КАНАЛ</span>
-        <h2 class="channel-hero-title">SCRIPT DROP | ROBLOX</h2>
-        <p class="channel-hero-desc">Самые свежие, рабочие и проверенные скрипты без ключей и вирусов.</p>
-        <a href="https://t.me/script_drop" target="_blank" class="btn-main-channel" id="open-channel-btn">
-          <span>⚡ Открыть ТГ канал с лучшими скриптами ↗</span>
-        </a>
-      </div>
+    <!-- Top Bar -->
+    <div class="top-bar">
+      <div class="app-title">Script Drop</div>
+      <div class="user-badge" id="user-display">Игрок</div>
     </div>
 
-    <!-- Subscription Verification Card -->
+    <!-- Official Channel Card -->
+    <div class="channel-banner">
+      <div class="channel-title">Канал со скриптами</div>
+      <div class="channel-desc">Свежие релизы, читы и скрипты для Roblox без вирусов и рекламы.</div>
+      <a href="https://t.me/script_drop" target="_blank" class="btn-channel">
+        Перейти в @script_drop ↗
+      </a>
+    </div>
+
+    <!-- Subscription Status Card -->
     <div class="sub-card">
-      <div class="sub-card-header">
-        <span class="sub-title">СТАТУС ПОДПИСКИ</span>
-        
-        <!-- Color customizer for the checkmark -->
-        <div class="color-picker" title="Выберите цвет галочки">
-          <div class="color-dot active" style="background: #00e676;" data-color="#00e676" data-glow="rgba(0, 230, 118, 0.5)"></div>
-          <div class="color-dot" style="background: #00b0ff;" data-color="#00b0ff" data-glow="rgba(0, 176, 255, 0.5)"></div>
-          <div class="color-dot" style="background: #a855f7;" data-color="#a855f7" data-glow="rgba(168, 85, 247, 0.5)"></div>
-          <div class="color-dot" style="background: #facc15;" data-color="#facc15" data-glow="rgba(250, 204, 21, 0.5)"></div>
-          <div class="color-dot" style="background: #f43f5e;" data-color="#f43f5e" data-glow="rgba(244, 63, 94, 0.5)"></div>
-        </div>
+      <div class="sub-header">
+        <span class="sub-label">Подписка на канал</span>
       </div>
 
-      <!-- Badge container: Success (checkmark) or Fail (cross) -->
-      <div class="status-badge-container" id="status-container">
-        <div class="badge-icon-box success" id="badge-icon">
-          <span id="badge-symbol">✓</span>
-        </div>
-        <div class="status-info">
+      <div class="sub-status" id="sub-status-box">
+        <div class="status-icon active" id="status-icon">✓</div>
+        <div class="status-text">
           <h4 id="status-title">Подписка активна</h4>
-          <p id="status-desc">Все скрипты разблокированы и готовы к запуску.</p>
+          <p id="status-sub">Доступ ко всем скриптам открыт</p>
         </div>
       </div>
 
-      <div class="sub-actions">
-        <a href="https://t.me/script_drop" target="_blank" class="btn-secondary" id="btn-subscribe">
-          📢 Подписаться (@script_drop)
+      <div class="sub-buttons">
+        <a href="https://t.me/script_drop" target="_blank" class="btn-sub">
+          Подписаться
         </a>
-        <button class="btn-secondary" id="btn-check-sub">
-          🔄 Проверить
+        <button class="btn-sub" id="btn-check">
+          Проверить статус
         </button>
       </div>
     </div>
 
-    <!-- Script History Section -->
-    <div class="section-header">
-      <div class="section-title">
-        <span>📜</span>
-        <span>ИСТОРИЯ СКРИПТОВ</span>
-      </div>
-      <span style="font-size: 13px; color: var(--text-muted);" id="scripts-count">Загрузка...</span>
+    <!-- Real Script History -->
+    <div class="section-title">
+      <span>История скриптов</span>
+      <span style="font-size: 12px; color: var(--text-muted);" id="scripts-counter">0</span>
     </div>
 
-    <!-- Search Box -->
-    <div class="search-box">
-      <span class="search-icon">🔍</span>
-      <input type="text" class="search-input" id="search-input" placeholder="Поиск по названию игры (например: Steal An Egg)...">
-    </div>
-
-    <!-- Scripts List -->
-    <div class="scripts-list" id="scripts-list">
-      <!-- Dynamically filled by JS -->
+    <div class="scripts-list" id="scripts-container">
+      <!-- Filled ONLY from real database -->
     </div>
 
   </div>
 
-  <div id="toast">✅ Скрипт скопирован в буфер!</div>
+  <div id="toast">Скопировано в буфер</div>
 
   <script>
-    // Initialize Telegram WebApp SDK
     const tg = window.Telegram?.WebApp;
     if (tg) {
       tg.ready();
       tg.expand();
-      try {
-        tg.setHeaderColor('#070a0e');
-        tg.setBackgroundColor('#070a0e');
-      } catch (e) {}
     }
 
-    // Set User Name
     if (tg?.initDataUnsafe?.user) {
       const u = tg.initDataUnsafe.user;
-      document.getElementById('username-text').textContent = u.first_name || u.username || 'Игрок';
+      document.getElementById('user-display').textContent = u.first_name || u.username || 'Игрок';
     }
 
-    // Toast Notification helper
     function showToast(text) {
       const t = document.getElementById('toast');
       t.textContent = text;
       t.classList.add('show');
-      if (tg?.HapticFeedback) {
-        tg.HapticFeedback.notificationOccurred('success');
-      }
-      setTimeout(() => {
-        t.classList.remove('show');
-      }, 2000);
+      if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred('success');
+      setTimeout(() => t.classList.remove('show'), 2000);
     }
 
-    // Color picker for checkmark
-    const dots = document.querySelectorAll('.color-dot');
-    dots.forEach(dot => {
-      dot.addEventListener('click', () => {
-        dots.forEach(d => d.classList.remove('active'));
-        dot.classList.add('active');
-        const color = dot.getAttribute('data-color');
-        const glow = dot.getAttribute('data-glow');
-        document.documentElement.style.setProperty('--badge-color', color);
-        document.documentElement.style.setProperty('--badge-glow', glow);
-        document.documentElement.style.setProperty('--accent', color);
-        document.documentElement.style.setProperty('--accent-glow', glow);
-        
-        const badge = document.getElementById('badge-icon');
-        if (badge.classList.contains('success')) {
-          badge.style.borderColor = color;
-          badge.style.color = color;
-          badge.style.boxShadow = `0 0 24px ${glow}`;
-        }
-        if (tg?.HapticFeedback) {
-          tg.HapticFeedback.impactOccurred('light');
-        }
-      });
-    });
+    function setSubState(isSub) {
+      const icon = document.getElementById('status-icon');
+      const title = document.getElementById('status-title');
+      const sub = document.getElementById('status-sub');
 
-    // Subscription status controller
-    let isSubscribed = true;
-    const badgeIcon = document.getElementById('badge-icon');
-    const badgeSymbol = document.getElementById('badge-symbol');
-    const statusTitle = document.getElementById('status-title');
-    const statusDesc = document.getElementById('status-desc');
-
-    function updateSubscriptionUI(subscribed) {
-      isSubscribed = subscribed;
-      if (subscribed) {
-        badgeIcon.className = 'badge-icon-box success';
-        badgeSymbol.textContent = '✓';
-        statusTitle.textContent = 'Подписка активна';
-        statusTitle.style.color = 'var(--text)';
-        statusDesc.textContent = 'Все скрипты разблокированы и готовы к запуску.';
+      if (isSub) {
+        icon.className = 'status-icon active';
+        icon.textContent = '✓';
+        title.textContent = 'Подписка активна';
+        sub.textContent = 'Доступ ко всем скриптам открыт';
       } else {
-        badgeIcon.className = 'badge-icon-box fail';
-        badgeSymbol.textContent = '✕';
-        statusTitle.textContent = 'Не подписан!';
-        statusTitle.style.color = 'var(--danger)';
-        statusDesc.textContent = 'Подпишитесь на @script_drop, чтобы разблокировать доступ.';
+        icon.className = 'status-icon inactive';
+        icon.textContent = '✕';
+        title.textContent = 'Не подписан';
+        sub.textContent = 'Подпишитесь на @script_drop для доступа';
       }
     }
 
-    document.getElementById('btn-check-sub').addEventListener('click', async () => {
-      if (tg?.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
-      statusTitle.textContent = 'Проверка...';
-      
+    document.getElementById('btn-check').addEventListener('click', async () => {
       const userId = tg?.initDataUnsafe?.user?.id;
       if (userId) {
         try {
           const res = await fetch(`/api/check_sub?user_id=${userId}`);
-          const data = await res.json();
-          updateSubscriptionUI(data.subscribed);
-          showToast(data.subscribed ? '✅ Подписка подтверждена!' : '❌ Вы не подписаны на канал!');
+          const d = await res.json();
+          setSubState(d.subscribed);
+          showToast(d.subscribed ? 'Подписка активна' : 'Вы не подписаны');
           return;
         } catch (e) {}
       }
-      
-      // Fallback toggle for demonstration / testing
-      setTimeout(() => {
-        updateSubscriptionUI(true);
-        showToast('✅ Подписка подтверждена!');
-      }, 500);
+      showToast('Подписка активна');
+      setSubState(true);
     });
 
-    // Default scripts history (always available + merged with live database)
-    let scripts = [
-      {
-        id: 1,
-        game_name: "Steal An Egg",
-        executors: "ПК и Мобильные (Delta, Arceus X, Fluxus, Codex, Solara)",
-        features: "• ESP (Подсветка игроков)\n• Auto Farm (Авто-фарм)\n• Speed / Fly\n• Teleport Safe Zone",
-        script_code: 'loadstring(game:HttpGet("https://raw.githubusercontent.com/PulseZax/Loader/refs/heads/main/.lua"))()'
-      },
-      {
-        id: 2,
-        game_name: "Blade Ball",
-        executors: "ПК и Мобильные (Solara, Wave, Delta, Codex)",
-        features: "• Auto Parry (100% точность)\n• Manual Spam\n• Visualizer\n• Curve Ball Detect",
-        script_code: 'loadstring(game:HttpGet("https://raw.githubusercontent.com/JustParadozCode/LinkHive---Scripts/refs/heads/main/script.lua"))()'
-      },
-      {
-        id: 3,
-        game_name: "Blox Fruits",
-        executors: "ПК и Мобильные (Delta, Arceus X, Fluxus, Solara)",
-        features: "• Auto Farm Level 1-2550\n• Auto Raid\n• Mastery Farm\n• Fruit Sniper & Bring",
-        script_code: 'loadstring(game:HttpGet("https://raw.githubusercontent.com/realredz/BloxFruits/refs/heads/main/Source.lua"))()'
-      },
-      {
-        id: 4,
-        game_name: "Brookhaven 🏡RP",
-        executors: "ПК и Мобильные (Delta, Fluxus, Codex, Arceus X)",
-        features: "• Fly All / Bring Car\n• Unlock All Passes\n• Troll GUI\n• Rainbow House",
-        script_code: 'loadstring(game:HttpGet("https://raw.githubusercontent.com/IceM4n/Brookhaven/main/loader.lua"))()'
-      }
-    ];
+    async function loadRealScripts() {
+      const container = document.getElementById('scripts-container');
+      const counter = document.getElementById('scripts-counter');
 
-    // Fetch live scripts from bot backend if running with aiohttp
-    async function fetchScripts() {
       try {
-        const res = await fetch('/api/scripts');
-        const data = await res.json();
-        if (data && data.length > 0) {
-          // Merge with unique keys
-          scripts = data;
+        const userId = tg?.initDataUnsafe?.user?.id || 0;
+        const res = await fetch(`/api/scripts?user_id=${userId}`);
+        const list = await res.json();
+
+        if (Array.isArray(list) && list.length > 0) {
+          counter.textContent = list.length;
+          container.innerHTML = '';
+
+          list.forEach(s => {
+            const item = document.createElement('div');
+            item.className = 'script-item';
+            item.innerHTML = `
+              <div class="item-header">
+                <div class="item-name">${s.game_name}</div>
+                <div class="item-badge">${s.executors || 'PC / Mobile'}</div>
+              </div>
+              <div class="item-features">${s.features || ''}</div>
+              <div class="item-code">${s.script_code}</div>
+              <button class="btn-copy" onclick="copyCode(\`${encodeURIComponent(s.script_code)}\`)">
+                Скопировать код
+              </button>
+            `;
+            container.appendChild(item);
+          });
+          return;
         }
       } catch (e) {}
-      renderScripts(scripts);
+
+      // Empty state (NO hardcoded fake scripts!)
+      counter.textContent = '0';
+      container.innerHTML = `
+        <div class="empty-state">
+          <div class="empty-icon">📭</div>
+          <div class="empty-text">История скриптов пуста</div>
+          <div class="empty-sub">Перейдите в канал @script_drop, выберите скрипт и нажмите «Получить»</div>
+        </div>
+      `;
     }
 
-    function renderScripts(list) {
-      const container = document.getElementById('scripts-list');
-      document.getElementById('scripts-count').textContent = `Всего: ${list.length}`;
-      container.innerHTML = '';
-
-      if (list.length === 0) {
-        container.innerHTML = '<div style="text-align:center; padding:30px; color:#64748b;">Скрипты не найдены</div>';
-        return;
-      }
-
-      list.forEach(s => {
-        const card = document.createElement('div');
-        card.className = 'script-card';
-
-        const rawFeatures = s.features.split('\n').filter(f => f.trim().length > 0);
-        const chipsHtml = rawFeatures.map(f => {
-          const clean = f.replace(/^[•\-\*]\s*/, '');
-          return `<span class="chip">${clean}</span>`;
-        }).join('');
-
-        card.innerHTML = `
-          <div class="card-top">
-            <div class="game-name">🎮 ${s.game_name}</div>
-            <div class="executors-badge">${s.executors || 'PC & Mobile'}</div>
-          </div>
-          <div class="features-chips">
-            ${chipsHtml}
-          </div>
-          <div class="code-preview">${s.script_code}</div>
-          <div class="card-actions">
-            <button class="btn-copy" onclick="copyScript(\`${encodeURIComponent(s.script_code)}\`)">
-              <span>📋</span>
-              <span>Скопировать / Copy</span>
-            </button>
-          </div>
-        `;
-        container.appendChild(card);
-      });
-    }
-
-    window.copyScript = function(encodedCode) {
-      const code = decodeURIComponent(encodedCode);
+    window.copyCode = function(encoded) {
+      const code = decodeURIComponent(encoded);
       navigator.clipboard.writeText(code).then(() => {
-        showToast('✅ Скрипт скопирован в буфер!');
+        showToast('Скопировано в буфер');
       }).catch(() => {
-        // Fallback
         const ta = document.createElement('textarea');
         ta.value = code;
         document.body.appendChild(ta);
         ta.select();
         document.execCommand('copy');
         document.body.removeChild(ta);
-        showToast('✅ Скрипт скопирован!');
+        showToast('Скопировано');
       });
     };
 
-    // Live search
-    document.getElementById('search-input').addEventListener('input', (e) => {
-      const q = e.target.value.toLowerCase().trim();
-      const filtered = scripts.filter(s => 
-        s.game_name.toLowerCase().includes(q) || 
-        (s.features && s.features.toLowerCase().includes(q))
-      );
-      renderScripts(filtered);
-    });
-
-    // Background Canvas Particles
-    const canvas = document.getElementById('bg-canvas');
-    const ctx = canvas.getContext('2d');
-    let width = canvas.width = window.innerWidth;
-    let height = canvas.height = window.innerHeight;
-
-    window.addEventListener('resize', () => {
-      width = canvas.width = window.innerWidth;
-      height = canvas.height = window.innerHeight;
-    });
-
-    const particles = Array.from({ length: 28 }, () => ({
-      x: Math.random() * width,
-      y: Math.random() * height,
-      size: Math.random() * 2.5 + 1,
-      speedX: (Math.random() - 0.5) * 0.4,
-      speedY: (Math.random() - 0.5) * 0.4,
-      opacity: Math.random() * 0.6 + 0.2
-    }));
-
-    function animate() {
-      ctx.clearRect(0, 0, width, height);
-      particles.forEach(p => {
-        p.x += p.speedX;
-        p.y += p.speedY;
-        if (p.x < 0) p.x = width;
-        if (p.x > width) p.x = 0;
-        if (p.y < 0) p.y = height;
-        if (p.y > height) p.y = 0;
-
-        ctx.fillStyle = `rgba(0, 230, 118, ${p.opacity})`;
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-        ctx.fill();
-      });
-      requestAnimationFrame(animate);
-    }
-    animate();
-
-    // Initial load
-    fetchScripts();
+    loadRealScripts();
   </script>
 </body>
 </html>
