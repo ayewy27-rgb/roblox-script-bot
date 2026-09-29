@@ -3,6 +3,7 @@ import asyncio
 import logging
 import sys
 import re
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Optional
 
@@ -28,6 +29,9 @@ from aiohttp import web
 import config
 import database
 import post_builder
+
+# Timezone GMT+5
+TZ_GMT5 = timezone(timedelta(hours=5))
 
 # Setup logging
 logging.basicConfig(
@@ -107,6 +111,7 @@ def get_admin_menu_keyboard() -> InlineKeyboardMarkup:
         inline_keyboard=[
             [InlineKeyboardButton(text="➕ Создать пост со скриптом", callback_data="admin_create_post")],
             [InlineKeyboardButton(text="📱 Обновить Delta APK (Автодельта)", callback_data="admin_upload_delta")],
+            [InlineKeyboardButton(text="⏰ Автопост 12:00 GMT+5", callback_data="admin_autopost_menu")],
             [InlineKeyboardButton(text="📌 Опубликовать шапку канала", callback_data="admin_post_header")],
             [InlineKeyboardButton(text="📢 Привязать Telegram-канал", callback_data="admin_set_channel")],
             [InlineKeyboardButton(text="📋 Список скриптов", callback_data="admin_list_scripts")],
@@ -866,6 +871,149 @@ async def handle_user_search(message: Message, state: FSMContext):
 
     await message.answer(msg_text, reply_markup=InlineKeyboardMarkup(inline_keyboard=kb_buttons))
 
+# --- DAILY INTERACTIVE AUTOPOST (12:00 GMT+5) ---
+
+def build_daily_interactive_post_text(bot_username: str) -> str:
+    return (
+        "🔥 <b>НА КАКУЮ ИГРУ СКИНУТЬ СКРИПТ?</b> 🔥\n"
+        "━━━━━━━━━━━━━━━━━━━━━\n"
+        "👋 Привет, подписчики! Администрация канала готовит новую пачку топовых скриптов и читов.\n\n"
+        "👇 <b>Напишите в комментариях под этим постом:</b>\n"
+        "1️⃣ Название вашей любимой игры в Roblox\n"
+        "2️⃣ Какой функционал вам нужен (Auto Farm, ESP, Aimbot, Auto Parry, Teleport, Fly)\n\n"
+        "⚡ <i>Скрипты на игры с наибольшим количеством голосов и комментариев мы выложим в первую очередь уже сегодня!</i>\n"
+        "━━━━━━━━━━━━━━━━━━━━━\n"
+        f"🤖 <b>Наш бот со скриптами:</b> @{bot_username}\n"
+        "📱 <b>Инжектор Delta для телефона:</b> закреплён в канале"
+    )
+
+async def publish_daily_interactive_post(force: bool = False) -> bool:
+    """Publishes the daily interactive game request post to the channel."""
+    channel = await database.get_setting("channel_id", config.CHANNEL_ID)
+    if not channel:
+        logger.warning("Daily autopost skipped: channel is not set.")
+        return False
+
+    today_str = datetime.now(TZ_GMT5).strftime("%Y-%m-%d")
+    last_post_date = await database.get_setting("last_daily_autopost_date")
+    if not force and last_post_date == today_str:
+        logger.info("Daily interactive post already published today.")
+        return False
+
+    bot_info = await bot.get_me()
+    bot_user = bot_info.username or config.BOT_USERNAME
+    post_text = build_daily_interactive_post_text(bot_user)
+
+    markup = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="🤖 Открыть бота со скриптами", url=f"https://t.me/{bot_user}")],
+            [InlineKeyboardButton(text="📱 Каталог скриптов (App)", web_app=WebAppInfo(url=get_webapp_url()))],
+        ]
+    )
+
+    try:
+        if config.BANNER_PATH.exists():
+            photo = FSInputFile(config.BANNER_PATH)
+            await bot.send_photo(chat_id=channel, photo=photo, caption=post_text, reply_markup=markup)
+        else:
+            await bot.send_message(chat_id=channel, text=post_text, reply_markup=markup)
+
+        await database.set_setting("last_daily_autopost_date", today_str)
+        logger.info(f"Daily interactive post published to {channel} for {today_str}.")
+        return True
+    except Exception as e:
+        logger.error(f"Failed to publish daily interactive post: {e}")
+        return False
+
+async def daily_autopost_scheduler():
+    """Background loop that publishes daily interactive post at 12:00 GMT+5."""
+    logger.info("Daily autopost scheduler (12:00 GMT+5) started.")
+    while True:
+        try:
+            now_gmt5 = datetime.now(TZ_GMT5)
+            target = now_gmt5.replace(hour=12, minute=0, second=0, microsecond=0)
+            if now_gmt5 >= target:
+                target += timedelta(days=1)
+                
+            wait_seconds = (target - now_gmt5).total_seconds()
+            logger.info(f"Next daily interactive post scheduled for {target.strftime('%Y-%m-%d %H:%M:%S')} GMT+5 (in {int(wait_seconds)}s)")
+            
+            await asyncio.sleep(wait_seconds)
+
+            enabled = await database.get_setting("daily_autopost_enabled", "true")
+            if enabled.lower() == "true":
+                await publish_daily_interactive_post(force=False)
+                
+            await asyncio.sleep(60)
+        except asyncio.CancelledError:
+            logger.info("Daily autopost scheduler stopped.")
+            break
+        except Exception as e:
+            logger.error(f"Error in daily_autopost_scheduler: {e}")
+            await asyncio.sleep(30)
+
+@dp.callback_query(F.data == "admin_autopost_menu")
+async def callback_admin_autopost(call: CallbackQuery):
+    if not await is_admin(call.from_user.id):
+        await call.answer("⛔ Нет доступа", show_alert=True)
+        return
+
+    enabled = await database.get_setting("daily_autopost_enabled", "true")
+    is_on = enabled.lower() == "true"
+    status_emoji = "🟢 Включен" if is_on else "🔴 Выключен"
+    toggle_text = "🔴 Выключить автопост" if is_on else "🟢 Включить автопост"
+
+    last_date = await database.get_setting("last_daily_autopost_date", "Ещё не было")
+    now_str = datetime.now(TZ_GMT5).strftime("%H:%M:%S")
+
+    text = (
+        "⏰ <b>Ежедневный автопост «На какую игру скинуть скрипт?»</b>\n\n"
+        f"📌 Статус: <b>{status_emoji}</b>\n"
+        f"🕒 Время отправки: <b>каждый день в 12:00 (GMT+5)</b>\n"
+        f"📅 Текущее время на сервере: <b>{now_str} (GMT+5)</b>\n"
+        f"📝 Последняя отправка: <code>{last_date}</code>\n\n"
+        "Бот ежедневно публикует интерактивный пост с призывом к подписчикам писать желаемые игры в комментариях."
+    )
+
+    kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="🚀 Опубликовать тест прямо сейчас", callback_data="autopost_test_now")],
+            [InlineKeyboardButton(text=toggle_text, callback_data="autopost_toggle")],
+            [InlineKeyboardButton(text="◀️ Назад в меню", callback_data="open_admin_panel")],
+        ]
+    )
+
+    await call.message.answer(text, reply_markup=kb)
+    await call.answer()
+
+@dp.callback_query(F.data == "autopost_toggle")
+async def callback_autopost_toggle(call: CallbackQuery):
+    if not await is_admin(call.from_user.id):
+        await call.answer("⛔ Нет доступа", show_alert=True)
+        return
+
+    enabled = await database.get_setting("daily_autopost_enabled", "true")
+    new_val = "false" if enabled.lower() == "true" else "true"
+    await database.set_setting("daily_autopost_enabled", new_val)
+
+    await call.answer("Настройки обновлены!")
+    await callback_admin_autopost(call)
+
+@dp.callback_query(F.data == "autopost_test_now")
+async def callback_autopost_test_now(call: CallbackQuery):
+    if not await is_admin(call.from_user.id):
+        await call.answer("⛔ Нет доступа", show_alert=True)
+        return
+
+    success = await publish_daily_interactive_post(force=True)
+    if success:
+        channel = await database.get_setting("channel_id", config.CHANNEL_ID)
+        await call.message.answer(f"🎉 <b>Интерактивный пост успешно опубликован в {channel}!</b>")
+        await call.answer("✅ Успешно!")
+    else:
+        await call.message.answer("❌ <b>Не удалось отправить пост.</b> Проверьте, привязан ли канал и есть ли у бота права админа.")
+        await call.answer("Ошибка")
+
 # --- WEB SERVER FOR MINI APP API ---
 
 async def webapp_html_handler(request):
@@ -920,11 +1068,15 @@ async def main():
     await site.start()
     logger.info(f"Web App server started on http://0.0.0.0:{port}")
 
+    # Start background scheduler for daily autopost (12:00 GMT+5)
+    autopost_task = asyncio.create_task(daily_autopost_scheduler())
+
     logger.info("Starting bot polling...")
     try:
         await bot.delete_webhook(drop_pending_updates=True)
         await dp.start_polling(bot)
     finally:
+        autopost_task.cancel()
         await runner.cleanup()
         await bot.session.close()
 

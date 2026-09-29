@@ -123,7 +123,7 @@
       border: 1px solid var(--card-border);
       border-radius: 16px;
       padding: 16px;
-      margin-bottom: 18px;
+      margin-bottom: 20px;
     }
 
     .sub-header {
@@ -289,65 +289,7 @@
       transform: scale(0.97);
     }
 
-    /* Tabs Navigation */
-    .tabs-nav {
-      display: flex;
-      background: var(--card-bg);
-      border: 1px solid var(--card-border);
-      border-radius: 12px;
-      padding: 4px;
-      margin-bottom: 16px;
-      gap: 4px;
-    }
-
-    .tab-btn {
-      flex: 1;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 6px;
-      padding: 10px 8px;
-      font-size: 13px;
-      font-weight: 600;
-      color: var(--text-muted);
-      background: transparent;
-      border: none;
-      border-radius: 9px;
-      cursor: pointer;
-      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-    }
-
-    .tab-btn.active {
-      background: var(--btn-bg);
-      color: #ffffff;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
-    }
-
-    .tab-btn:active {
-      transform: scale(0.97);
-    }
-
-    .tab-badge {
-      font-size: 11px;
-      background: rgba(255, 255, 255, 0.08);
-      padding: 2px 7px;
-      border-radius: 10px;
-      color: var(--text-muted);
-    }
-
-    .tab-badge.hot {
-      background: rgba(239, 68, 68, 0.2);
-      color: #f87171;
-      border: 1px solid rgba(239, 68, 68, 0.3);
-      font-weight: 700;
-    }
-
-    .tab-btn.active .tab-badge:not(.hot) {
-      background: rgba(255, 255, 255, 0.15);
-      color: #ffffff;
-    }
-
-    /* Scripts Section & Animation */
+    /* History Section & Animation */
     .section-title {
       font-size: 15px;
       font-weight: 600;
@@ -408,12 +350,6 @@
       background: rgba(255, 255, 255, 0.06);
       padding: 3px 8px;
       border-radius: 6px;
-    }
-
-    .item-badge.hot-badge {
-      color: #34d399;
-      background: rgba(16, 185, 129, 0.12);
-      border: 1px solid rgba(16, 185, 129, 0.25);
     }
 
     .item-features {
@@ -489,7 +425,7 @@
       margin-bottom: 14px;
     }
 
-    .btn-empty-top {
+    .btn-empty-channel {
       display: inline-flex;
       align-items: center;
       gap: 6px;
@@ -497,18 +433,19 @@
       color: #ffffff;
       font-size: 13px;
       font-weight: 600;
-      padding: 8px 16px;
+      padding: 10px 18px;
       border-radius: 20px;
       border: 1px solid var(--card-border);
+      text-decoration: none;
       cursor: pointer;
       transition: transform 0.15s;
     }
 
-    .btn-empty-top:active {
+    .btn-empty-channel:active {
       transform: scale(0.96);
     }
 
-    /* Floating Rewind / Scroll to Top Button */
+    /* Floating Rewind / Scroll To Top Button */
     #btn-rewind {
       position: fixed;
       bottom: 22px;
@@ -619,26 +556,14 @@
       </div>
     </div>
 
-    <!-- Navigation Tabs: History & Best Scripts -->
-    <div class="tabs-nav">
-      <button class="tab-btn active" id="tab-my" onclick="switchTab('my')">
-        <span>📋 Моя история</span>
-        <span class="tab-badge" id="tab-my-count">0</span>
-      </button>
-      <button class="tab-btn" id="tab-top" onclick="switchTab('top')">
-        <span>⭐ Лучшие скрипты</span>
-        <span class="tab-badge hot">HOT</span>
-      </button>
-    </div>
-
-    <!-- Scripts List Section -->
+    <!-- Scripts History Section -->
     <div class="section-title">
-      <span id="section-heading">История скриптов</span>
+      <span>История скриптов</span>
       <span style="font-size: 12px; color: var(--text-muted);" id="scripts-counter">0</span>
     </div>
 
     <div class="scripts-list" id="scripts-container">
-      <!-- Injected dynamically -->
+      <!-- Injected from real database -->
     </div>
 
   </div>
@@ -745,125 +670,53 @@
       });
     }
 
-    // Curated Top Scripts
-    const TOP_SCRIPTS = [
-      {
-        game_name: 'Blox Fruits',
-        badge: '⭐ 9.9 | 🔥 150k+ онлайн',
-        executors: 'ПК и Мобильные (Delta, Arceus X, Fluxus, Codex, Solara)',
-        features: '• ESP (Подсветка игроков, сундуков и фруктов)\n• Auto Farm Level & Mastery (Авто-фарм уровня)\n• Auto Raid & Dungeon (Прохождение рейдов)\n• Teleport, Safe Zone, WalkSpeed',
-        script_code: 'loadstring(game:HttpGet("https://raw.githubusercontent.com/JustParadozCode/LinkHive---Scripts/refs/heads/main/script.lua"))()'
-      },
-      {
-        game_name: 'Blade Ball',
-        badge: '⭐ 9.8 | ⚔️ Undetected',
-        executors: 'ПК и Мобильные (Delta, Arceus X, Fluxus, Codex, Solara)',
-        features: '• 100% Auto Parry (Авто-парирование мяча)\n• Curve Ball & Fast Spam Ability\n• Visual Target Tracer (Траектория мяча)\n• WalkSpeed & JumpPower',
-        script_code: 'loadstring(game:HttpGet("https://raw.githubusercontent.com/JustParadozCode/LinkHive---Scripts/refs/heads/main/script.lua"))()'
-      },
-      {
-        game_name: 'Steal an Egg',
-        badge: '⭐ 9.7 | 🥚 Топ релиз',
-        executors: 'ПК и Мобильные (Delta, Arceus X, Fluxus, Codex, Solara)',
-        features: '• Auto Steal Egg (Мгновенный сбор яиц)\n• Instant Hatch & Open Eggs (Быстрое открытие)\n• WalkSpeed, Fly, Safe Zone\n• ESP на редкие яйца',
-        script_code: 'loadstring(game:HttpGet("https://raw.githubusercontent.com/JustParadozCode/LinkHive---Scripts/refs/heads/main/script.lua"))()'
-      },
-      {
-        game_name: 'Rivals',
-        badge: '⭐ 9.9 | 🎯 Hitbox & Aim',
-        executors: 'ПК (Solara, Wave) и Мобильные (Delta, Codex)',
-        features: '• Silent Aim & Triggerbot (Авто-стрельба)\n• Player Box ESP & Skeleton\n• Infinite Ammo & No Recoil (Без отдачи)\n• SpeedHack & Fly',
-        script_code: 'loadstring(game:HttpGet("https://raw.githubusercontent.com/JustParadozCode/LinkHive---Scripts/refs/heads/main/script.lua"))()'
-      },
-      {
-        game_name: 'Murder Mystery 2',
-        badge: '⭐ 9.6 | 🔪 Auto Farm',
-        executors: 'ПК и Мобильные (Delta, Arceus X, Fluxus, Codex, Solara)',
-        features: '• Auto Collect Coins (Фарм монет)\n• Role ESP (Подсветка Sheriff & Murderer)\n• Silent Aim (Мгновенное попадание)\n• Teleport to Gun / Safe Spot',
-        script_code: 'loadstring(game:HttpGet("https://raw.githubusercontent.com/JustParadozCode/LinkHive---Scripts/refs/heads/main/script.lua"))()'
-      }
-    ];
+    async function loadRealHistory() {
+      const container = document.getElementById('scripts-container');
+      const counter = document.getElementById('scripts-counter');
 
-    let myScripts = [];
-    let currentTab = 'my';
-
-    async function fetchUserScripts() {
       try {
         const userId = tg?.initDataUnsafe?.user?.id || 0;
         const res = await fetch(`/api/scripts?user_id=${userId}`);
-        const data = await res.json();
-        if (Array.isArray(data)) {
-          myScripts = data;
+        const list = await res.json();
+
+        if (Array.isArray(list) && list.length > 0) {
+          counter.textContent = list.length;
+          container.innerHTML = '';
+
+          list.forEach((s, idx) => {
+            const item = document.createElement('div');
+            item.className = 'script-item';
+            item.style.animationDelay = `${idx * 0.05}s`;
+
+            item.innerHTML = `
+              <div class="item-header">
+                <div class="item-name">${s.game_name}</div>
+                <div class="item-badge">${s.executors || 'PC / Mobile'}</div>
+              </div>
+              <div class="item-features">${s.features || ''}</div>
+              <div class="item-code">${s.script_code}</div>
+              <button class="btn-copy" onclick="copyCode(\`${encodeURIComponent(s.script_code)}\`)">
+                📋 Скопировать код
+              </button>
+            `;
+            container.appendChild(item);
+          });
+          return;
         }
-      } catch (e) {
-        myScripts = [];
-      }
-      document.getElementById('tab-my-count').textContent = myScripts.length;
-    }
+      } catch (e) {}
 
-    function renderScripts(list, isTopView = false) {
-      const container = document.getElementById('scripts-container');
-      const counter = document.getElementById('scripts-counter');
-      const heading = document.getElementById('section-heading');
-
-      heading.textContent = isTopView ? 'Лучшие скрипты' : 'История скриптов';
-      counter.textContent = list.length;
-      container.innerHTML = '';
-
-      if (list.length === 0) {
-        container.innerHTML = `
-          <div class="empty-state">
-            <div class="empty-icon">📭</div>
-            <div class="empty-text">История скриптов пуста</div>
-            <div class="empty-sub">Вы ещё не получали скриптов через бота. Выберите скрипт из лучших или в канале!</div>
-            <button class="btn-empty-top" onclick="switchTab('top')">
-              ⭐ Посмотреть лучшие скрипты
-            </button>
-          </div>
-        `;
-        return;
-      }
-
-      list.forEach((s, idx) => {
-        const item = document.createElement('div');
-        item.className = 'script-item';
-        item.style.animationDelay = `${idx * 0.05}s`;
-
-        const badgeHtml = s.badge
-          ? `<div class="item-badge hot-badge">${s.badge}</div>`
-          : `<div class="item-badge">${s.executors || 'PC / Mobile'}</div>`;
-
-        item.innerHTML = `
-          <div class="item-header">
-            <div class="item-name">${s.game_name}</div>
-            ${badgeHtml}
-          </div>
-          <div class="item-features">${s.features || ''}</div>
-          <div class="item-code">${s.script_code}</div>
-          <button class="btn-copy" onclick="copyCode(\`${encodeURIComponent(s.script_code)}\`)">
-            📋 Скопировать код
-          </button>
-        `;
-        container.appendChild(item);
-      });
-    }
-
-    function switchTab(tab) {
-      currentTab = tab;
-      const tabMy = document.getElementById('tab-my');
-      const tabTop = document.getElementById('tab-top');
-
-      if (tab === 'my') {
-        tabMy.classList.add('active');
-        tabTop.classList.remove('active');
-        renderScripts(myScripts, false);
-      } else {
-        tabTop.classList.add('active');
-        tabMy.classList.remove('active');
-        renderScripts(TOP_SCRIPTS, true);
-      }
-
-      if (tg?.HapticFeedback) tg.HapticFeedback.selectionChanged();
+      // Empty state
+      counter.textContent = '0';
+      container.innerHTML = `
+        <div class="empty-state">
+          <div class="empty-icon">📭</div>
+          <div class="empty-text">История скриптов пуста</div>
+          <div class="empty-sub">Вы ещё не получали скрипты через бота.<br>Перейдите в наш канал со скриптами, выберите нужную игру и нажмите «Получить скрипт»!</div>
+          <a href="https://t.me/script_drop" target="_blank" class="btn-empty-channel">
+            📢 Перейти в @script_drop ↗
+          </a>
+        </div>
+      `;
     }
 
     window.copyCode = function(encoded) {
@@ -881,18 +734,7 @@
       });
     };
 
-    // Initial boot
-    async function init() {
-      await fetchUserScripts();
-      // If user has history, start on 'my', else show 'top'
-      if (myScripts.length > 0) {
-        switchTab('my');
-      } else {
-        switchTab('top');
-      }
-    }
-
-    init();
+    loadRealHistory();
   </script>
 </body>
 </html>
