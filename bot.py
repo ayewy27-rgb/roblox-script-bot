@@ -24,6 +24,7 @@ from aiogram.types import (
     Message,
 )
 from aiogram.client.default import DefaultBotProperties
+import aiohttp
 from aiohttp import web
 
 import config
@@ -784,8 +785,8 @@ async def execute_post_header(call: CallbackQuery):
 
     header_kb = InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="🤖 Открыть бота со скриптами", url=f"https://t.me/{bot_user}")],
-            [InlineKeyboardButton(text="📱 Каталог скриптов (App)", web_app=WebAppInfo(url=get_webapp_url()))],
+            [InlineKeyboardButton(text="🤖 Открыть бота со скриптами ↗", url=f"https://t.me/{bot_user}")],
+            [InlineKeyboardButton(text="📱 Каталог скриптов в боте ↗", url=f"https://t.me/{bot_user}")],
         ]
     )
 
@@ -906,8 +907,8 @@ async def publish_daily_interactive_post(force: bool = False) -> bool:
 
     markup = InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="🤖 Открыть бота со скриптами", url=f"https://t.me/{bot_user}")],
-            [InlineKeyboardButton(text="📱 Каталог скриптов (App)", web_app=WebAppInfo(url=get_webapp_url()))],
+            [InlineKeyboardButton(text="🤖 Открыть бота со скриптами ↗", url=f"https://t.me/{bot_user}")],
+            [InlineKeyboardButton(text="📱 Каталог скриптов в боте ↗", url=f"https://t.me/{bot_user}")],
         ]
     )
 
@@ -1052,6 +1053,21 @@ def create_web_app():
     app.router.add_get("/api/check_sub", api_check_sub_handler)
     return app
 
+async def keep_alive_pinger():
+    """Periodically pings the external web app URL every 8 minutes so Render never falls asleep."""
+    logger.info("Keep-alive self-pinger started (8 min interval).")
+    await asyncio.sleep(60)
+    url = get_webapp_url()
+    while True:
+        try:
+            if url and "localhost" not in url and "127.0.0.1" not in url:
+                async with aiohttp.ClientSession() as session:
+                    async with session.get(url, timeout=15) as resp:
+                        logger.info(f"Keep-alive ping to {url}: HTTP {resp.status}")
+        except Exception as e:
+            logger.debug(f"Keep-alive ping notice: {e}")
+        await asyncio.sleep(480)
+
 # --- MAIN ---
 
 async def main():
@@ -1071,12 +1087,16 @@ async def main():
     # Start background scheduler for daily autopost (12:00 GMT+5)
     autopost_task = asyncio.create_task(daily_autopost_scheduler())
 
+    # Start self-pinging keep-alive to keep Render awake 24/7
+    keep_alive_task = asyncio.create_task(keep_alive_pinger())
+
     logger.info("Starting bot polling...")
     try:
-        await bot.delete_webhook(drop_pending_updates=True)
+        await bot.delete_webhook(drop_pending_updates=False)
         await dp.start_polling(bot)
     finally:
         autopost_task.cancel()
+        keep_alive_task.cancel()
         await runner.cleanup()
         await bot.session.close()
 
