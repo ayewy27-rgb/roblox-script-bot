@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: roblox-script-bot
+    env: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: python bot.py
+    envVars:
+      - key: BOT_TOKEN
+        value: 8820013965:AAEIsLK9t4Q4qcV7934Sr9yA1lNE8Z3Su88
+      - key: BOT_USERNAME
+        value: AsceRobloxScript_bot
+      - key: CHANNEL_ID
+        value: "@script_drop"
+      - key: ADMIN_IDS
+        value: "5891418490"
+      - key: PORT
+        value: "7860"
