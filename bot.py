@@ -316,11 +316,10 @@ async def handle_show_top_scripts(call: CallbackQuery):
 
 # --- ADMIN HANDLERS ---
 
-@dp.message(Command("admin"))
-async def handle_admin(message: Message):
-    user_id = message.from_user.id if message.from_user else 0
+async def send_admin_panel(chat_id: int, user_id: int):
+    """Sends the admin control panel to authorized admins."""
     if not await is_admin(user_id):
-        await message.answer("⛔ У вас нет доступа к панели администратора.")
+        await bot.send_message(chat_id=chat_id, text="⛔ У вас нет доступа к панели администратора.")
         return
 
     channel = await database.get_setting("channel_id", config.CHANNEL_ID)
@@ -332,15 +331,20 @@ async def handle_admin(message: Message):
         f"📢 Текущий канал для постов: {channel_display}\n\n"
         "Выберите действие в меню ниже:"
     )
-    await message.answer(text, reply_markup=kb)
+    await bot.send_message(chat_id=chat_id, text=text, reply_markup=kb)
+
+@dp.message(Command("admin"))
+async def handle_admin(message: Message):
+    user_id = message.from_user.id if message.from_user else 0
+    await send_admin_panel(chat_id=message.chat.id, user_id=user_id)
 
 @dp.callback_query(F.data == "open_admin_panel")
 async def callback_admin_panel(call: CallbackQuery):
-    if not await is_admin(call.from_user.id):
+    user_id = call.from_user.id
+    if not await is_admin(user_id):
         await call.answer("⛔ Нет доступа", show_alert=True)
         return
-    await call.message.edit_reply_markup(reply_markup=None)
-    await handle_admin(call.message)
+    await send_admin_panel(chat_id=call.message.chat.id, user_id=user_id)
     await call.answer()
 
 # --- FSM: MANUAL POST CREATION ---
