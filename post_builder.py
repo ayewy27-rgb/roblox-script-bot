@@ -3,8 +3,17 @@ import html
 from typing import Optional, Tuple, List
 
 def format_game_name(raw_name: str) -> str:
-    """Formats game name with Title Case and known acronyms."""
-    words = raw_name.strip().split()
+    """Formats game name with Title Case, cleans bracketed tags and emojis, handles known acronyms."""
+    # Remove bracketed update tags like [✨BONUS], [UPDATE 20], [EVENT], [NEW!], etc.
+    cleaned = re.sub(r'\[.*?\]', '', raw_name)
+    cleaned = re.sub(r'\(.*?update.*?\)', '', cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r'\(.*?event.*?\)', '', cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r'[^\w\s\-\.\']', '', cleaned)
+    cleaned = cleaned.strip()
+    if not cleaned:
+        cleaned = raw_name.strip()
+
+    words = cleaned.split()
     formatted_words = []
     
     known_acronyms = {
@@ -127,7 +136,14 @@ KNOWN_GAMES_FEATURES = {
         "• Teleport Behind Target (Мгновенный телепорт за спину врага)\n"
         "• Infinite Awakening / Ult (Бесконечный режим пробуждения)\n"
         "• ESP Players & HP Bar (Подсветка здоровья и энергии игроков)"
-    )
+    ),
+    "forsaken": (
+        "• Auto Generator (Автоматический ремонт генераторов)\n"
+        "• Invincible / Godmode (Полная неуязвимость к атакам)\n"
+        "• Infinite Stamina (Бесконечная выносливость и спринт)\n"
+        "• ESP Killer & Survivor (ВХ на маньяка и выживших)\n"
+        "• Instant Heal & Speed (Мгновенное лечение и скорость)"
+    ),
 }
 
 def generate_ai_features(game_name: str) -> str:
@@ -261,34 +277,120 @@ def build_user_delivery_message(game_name: str, script_code: Optional[str] = Non
         f"🚀 <b>Удачи!</b>"
     )
 
-def build_changelog_post_text(bot_username: str) -> str:
-    """Generates a major update announcement post for the channel."""
+def build_changelog_cyber(bot_username: str) -> str:
+    """Style 1: Cyber / Neon 2.0 (Technical, futuristic, sharp)."""
     return (
-        "🚀 <b>ГРАНДИОЗНОЕ ОБНОВЛЕНИЕ | SCRIPT DROP 2.0</b> 🚀\n"
+        "⚡ <b>SCRIPT DROP 2.0 | СИСТЕМА ПЕРЕЗАГРУЖЕНА</b> ⚡\n"
         "━━━━━━━━━━━━━━━━━━━━━\n"
-        "Мы полностью переработали бота и канал, чтобы сделать поиск и запуск скриптов ещё удобнее, быстрее и безопаснее!\n\n"
-        "🔥 <b>ЧТО НОВОГО В ЭТОМ ОБНОВЛЕНИИ:</b>\n\n"
-        "⚡ <b>1. Telegram Mini App 2.0</b>\n"
-        "• Новый интерфейс в стиле изумрудного кристалла\n"
-        "• Персональная история полученных скриптов\n"
-        "• Мгновенное копирование кода в один клик без задержек\n\n"
-        "📱 <b>2. Авто-обновление Delta Executor</b>\n"
-        "• Всегда самая актуальная версия для Android телефонов\n"
-        "• Простая установка APK в 1 тап и подробная инструкция\n"
-        "• Свежий инжектор всегда закреплён в шапке канала\n\n"
-        "🔍 <b>3. Мгновенный поиск скриптов прямо в боте</b>\n"
-        "• Просто напишите боту название любой игры (например: <code>Blox Fruits</code>, <code>Rivals</code>, <code>MM2</code>)\n"
-        "• Бот сам найдёт рабочий пост и моментально выдаст скрипт!\n\n"
-        "📊 <b>4. Ежедневные опросы подписчиков</b>\n"
-        "• Теперь каждый день вы сами голосуете за игру, на которую хотите скрипт\n"
-        "• Больше не нужно писать комментарии — голосуйте прямо в канале!\n\n"
-        "🛡 <b>5. Полная безопасность и защита от вредоносов</b>\n"
-        "• Все скрипты проходят строгий автоматический аудит безопасности\n"
-        "• 100% чистые loadstring — без RAT, стилеров и подозрительных вебхуков\n\n"
+        "<i>Глобальный апгрейд экосистемы Script Drop успешно завершён!</i>\n\n"
+        "🔮 <b>ЧТО ДОБАВЛЕНО В ВЕРСИИ 2.0:</b>\n\n"
+        "💎 <b>1. Telegram Mini App 2.0</b>\n"
+        "• Неоновый интерфейс и мгновенный отклик\n"
+        "• Вкладка «История» — ваши скрипты всегда под рукой\n"
+        "• Копирование loadstring в 1 тап без задержек\n\n"
+        "💉 <b>2. Свежий Delta Executor APK</b>\n"
+        "• Всегда рабочая версия под Android в закрепе\n"
+        "• Простая установка в 1 клик и понятный гайд\n\n"
+        "🔍 <b>3. Умный поиск читов в боте</b>\n"
+        "• Напиши боту название игры (рус/англ)\n"
+        "• Выдача 2 лучших скриптов с фото меню чита!\n\n"
+        "🛡 <b>4. Защита Anti-RAT & Stealer Guard</b>\n"
+        "• Авто-проверка на стилеры, вебхуки и вирусы\n\n"
+        "📊 <b>5. Ежедневные опросы в канале</b>\n"
+        "• Голосуй в 12:00 за следующую игру прямо в ленте!\n"
         "━━━━━━━━━━━━━━━━━━━━━\n"
-        f"🤖 <b>Наш бот:</b> @{bot_username}\n"
-        "👑 <b>Оставайтесь с нами и делитесь каналом с друзьями!</b>"
+        f"🤖 <b>Запустить бота:</b> @{bot_username}"
     )
+
+def build_changelog_hype(bot_username: str) -> str:
+    """Style 2: Hype / Gamer Community (Energetic, emoji-rich, community vibe)."""
+    return (
+        "🔥 <b>МЫ СДЕЛАЛИ ЭТО! ДОЛГОЖДАННЫЙ РЕЛИЗ 2.0!</b> 🔥\n"
+        "━━━━━━━━━━━━━━━━━━━━━\n"
+        "Парни, бот и канал вышли на новый уровень! Никаких битых ссылок и одинаковых скриптов — только лучший софт!\n\n"
+        "🚀 <b>ГЛАВНЫЕ НОВОВВЕДЕНИЯ:</b>\n\n"
+        "📱 <b>Собственное WebApp приложение!</b>\n"
+        "Каталог читов прямо внутри Телеграма с персональной историей скриптов!\n\n"
+        "🎯 <b>Свежий Delta Executor всегда в доступе!</b>\n"
+        "Рабочий APK закреплён в шапке канала. Скачал за секунду и погнал тащить!\n\n"
+        "🔍 <b>Поиск читов в ЛС бота!</b>\n"
+        "Пиши боту любую игру (мм2, стил ан эгг, форсакен) — бот выдаст 2 лучших чита с фото меню!\n\n"
+        "🛡 <b>100% Защита от RAT и стилеров!</b>\n"
+        "Каждый скрипт сканируется роботом перед выдачей.\n\n"
+        "📊 <b>Опросы прямо в канале!</b>\n"
+        "Голосуйте в 1 тап за игру, на которую хотите скрипт!\n"
+        "━━━━━━━━━━━━━━━━━━━━━\n"
+        f"👑 <b>Тестируй прямо сейчас:</b> @{bot_username}"
+    )
+
+def build_changelog_minimal(bot_username: str) -> str:
+    """Style 3: Minimalist / Premium Luxury (Clean, concise, elegant)."""
+    return (
+        "💎 <b>SCRIPT DROP — ОБНОВЛЕНИЕ 2.0</b>\n"
+        "━━━━━━━━━━━━━━━━━━━━━\n"
+        "Представляем обновлённую платформу скриптов для Roblox.\n\n"
+        "<b>Ключевые изменения:</b>\n\n"
+        "▪️ <b>Telegram Mini App</b> — удобный каталог и история ваших скриптов в 1 тап.\n"
+        "▪️ <b>Delta Executor</b> — всегда свежая версия инжектора закреплена в шапке.\n"
+        "▪️ <b>Умный поиск</b> — мгновенный подбор ТОП-2 скриптов со скриншотами меню чита.\n"
+        "▪️ <b>Безопасность</b> — автоматический фильтр отсекает любые RAT и стилеры.\n"
+        "▪️ <b>Вечные ссылки</b> — ссылки на скрипты теперь работают стабильно 30+ дней.\n"
+        "▪️ <b>Опросы сообщества</b> — выбирайте игру для следующего релиза.\n\n"
+        "━━━━━━━━━━━━━━━━━━━━━\n"
+        f"Бот: @{bot_username}\n"
+        "<i>Качество • Скорость • Безопасность</i>"
+    )
+
+def build_changelog_developer(bot_username: str) -> str:
+    """Style 4: Official Dev Patchnotes (Structured, professional, versioned)."""
+    return (
+        "🛠 <b>ОФИЦИАЛЬНЫЙ PATCH NOTES | BUILD 2.0</b>\n"
+        "━━━━━━━━━━━━━━━━━━━━━\n"
+        "<b>Статус ядра:</b> 🟢 Stable Release\n"
+        "<b>Модули:</b> Bot + Mini App + Script Engine\n\n"
+        "<b>СПИСОК ИЗМЕНЕНИЙ:</b>\n"
+        "• [App] Запущен Telegram Mini App с персональной историей\n"
+        "• [Search] Алгоритм выдачи ТОП-2 лучших скриптов (ScriptBlox & PulseHub)\n"
+        "• [Vision] Добавлен парсинг GUI-скриншотов меню читов\n"
+        "• [Security] Автоматический аудит кода (Anti-RAT & Anti-Webhook)\n"
+        "• [Database] Внедрён Persistent JSON Engine (ссылки активны 30+ дней)\n"
+        "• [Polls] Авто-публикация ежедневных голосований в 12:00\n"
+        "• [Delta] Закреплён авто-обновляемый APK для Android\n\n"
+        "━━━━━━━━━━━━━━━━━━━━━\n"
+        f"🤖 <b>Панель управления:</b> @{bot_username}"
+    )
+
+CHANGELOG_STYLES = {
+    "cyber": {
+        "name": "⚡ Кибер",
+        "full_name": "⚡ Кибер / Неон 2.0",
+        "builder": build_changelog_cyber,
+    },
+    "hype": {
+        "name": "🔥 Хайп",
+        "full_name": "🔥 Хайповый / Геймерский",
+        "builder": build_changelog_hype,
+    },
+    "minimal": {
+        "name": "💎 Минимал",
+        "full_name": "💎 Премиум / Минимализм",
+        "builder": build_changelog_minimal,
+    },
+    "dev": {
+        "name": "🛠 Dev",
+        "full_name": "🛠 Patchnotes / Dev Release",
+        "builder": build_changelog_developer,
+    },
+}
+
+def get_changelog_text(style: str, bot_username: str) -> str:
+    """Returns the changelog formatted in the requested visual style."""
+    entry = CHANGELOG_STYLES.get(style) or CHANGELOG_STYLES["cyber"]
+    return entry["builder"](bot_username)
+
+def build_changelog_post_text(bot_username: str) -> str:
+    """Default backward-compatible changelog generator."""
+    return build_changelog_cyber(bot_username)
 
 def get_daily_poll_data() -> Tuple[str, List[str]]:
     """Returns question and options for the daily interactive poll in the channel."""

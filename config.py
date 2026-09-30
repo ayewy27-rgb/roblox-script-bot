@@ -18,6 +18,7 @@ ADMIN_IDS = [5891418490] + [
 WEBAPP_URL = os.getenv("WEBAPP_URL", "https://roblox-script-bot.onrender.com")
 
 DB_PATH = BASE_DIR / "bot_database.sqlite3"
+SCRIPTS_STORE_PATH = BASE_DIR / "scripts_store.json"
 BANNER_PATH = BASE_DIR / "banner.jpg"
 BANNER_WELCOME = BASE_DIR / "banner_welcome.jpg"
 BANNER_DELIVERY = BASE_DIR / "banner_delivery.jpg"

@@ -9,53 +9,38 @@ import post_builder
 
 logger = logging.getLogger(__name__)
 
-# --- KNOWN VERIFIED FAST SCRIPT SOURCES (PulseHub & Verified Repositories) ---
+# Known verified Fast PulseHub scripts
 PULSEHUB_GAMES = {
     "mm2": {
         "title": "Pulse Hub | Murder Mystery 2 (Keyless & Safe)",
         "game_name": "Murder Mystery 2",
         "script_code": "loadstring(game:HttpGet('https://raw.githubusercontent.com/JustParadozCode/LinkHive---Scripts/refs/heads/main/script.lua'))()",
         "source": "PulseHub.gg",
-    },
-    "murder mystery 2": {
-        "title": "Pulse Hub | Murder Mystery 2 (Keyless & Safe)",
-        "game_name": "Murder Mystery 2",
-        "script_code": "loadstring(game:HttpGet('https://raw.githubusercontent.com/JustParadozCode/LinkHive---Scripts/refs/heads/main/script.lua'))()",
-        "source": "PulseHub.gg",
+        "image_url": "https://api.pulsehub.gg/assets/mm2.png",
     },
     "steal an egg": {
         "title": "Pulse Hub | Steal an Egg (Auto Steal & Fly)",
         "game_name": "Steal an Egg",
         "script_code": "loadstring(game:HttpGet('https://raw.githubusercontent.com/JustParadozCode/LinkHive---Scripts/refs/heads/main/script.lua'))()",
         "source": "PulseHub.gg",
+        "image_url": "https://tr.rbxcdn.com/180DAY-875b2a6dc156ce6dd64eb637e73238ce/480/270/Image/Png/noFilter",
     },
     "rivals": {
         "title": "Pulse Hub | Rivals (Silent Aim & ESP)",
         "game_name": "Rivals",
         "script_code": "loadstring(game:HttpGet('https://raw.githubusercontent.com/JustParadozCode/LinkHive---Scripts/refs/heads/main/script.lua'))()",
         "source": "PulseHub.gg",
+        "image_url": "https://scriptblox.com/images/script/-1-1790637613109.jpg",
     },
     "bloxstrike": {
         "title": "Pulse Hub | BloxStrike (Aimbot & ESP)",
         "game_name": "BloxStrike",
         "script_code": "loadstring(game:HttpGet('https://raw.githubusercontent.com/JustParadozCode/LinkHive---Scripts/refs/heads/main/script.lua'))()",
         "source": "PulseHub.gg",
-    },
-    "grow a garden": {
-        "title": "Pulse Hub | Grow a Garden 2 (Auto Farm)",
-        "game_name": "Grow a Garden 2",
-        "script_code": "loadstring(game:HttpGet('https://raw.githubusercontent.com/JustParadozCode/LinkHive---Scripts/refs/heads/main/script.lua'))()",
-        "source": "PulseHub.gg",
-    },
-    "speed": {
-        "title": "Pulse Hub | +1 Speed Every Second",
-        "game_name": "+1 Speed Every Second",
-        "script_code": "loadstring(game:HttpGet('https://raw.githubusercontent.com/JustParadozCode/LinkHive---Scripts/refs/heads/main/script.lua'))()",
-        "source": "PulseHub.gg",
+        "image_url": None,
     },
 }
 
-# Synonyms for Russian input and common acronyms
 SYNONYMS = {
     "мм2": "murder mystery 2",
     "мардер": "murder mystery 2",
@@ -82,9 +67,9 @@ SYNONYMS = {
     "пет сим": "pet simulator 99",
     "арсенал": "arsenal",
     "джуджутсу": "jujutsu shenanigans",
+    "форсакен": "forsaken",
 }
 
-# Strict security filter: blocks scripts with RATs, webhooks, stealers, and command injectors
 DANGEROUS_PATTERNS = [
     (r"discord(?:app)?\.com/api/webhooks", "Discord Webhook (Стилер данных)"),
     (r"api\.ipify\.org", "IP Logger (Сбор сетевых данных)"),
@@ -103,19 +88,36 @@ DANGEROUS_PATTERNS = [
 ]
 
 def check_script_safety(script_code: str, title: str = "") -> Tuple[bool, str]:
-    """Scans script content and title for security threats (RAT, stealers, token loggers)."""
     combined = f"{title} {script_code}".lower()
     for pattern, desc in DANGEROUS_PATTERNS:
         if re.search(pattern, combined, re.IGNORECASE):
             return False, desc
     return True, "Безопасно"
 
-def _fetch_scriptblox_sync(query: str, mode: str = "free") -> List[Dict[str, Any]]:
-    """Synchronous fetch from ScriptBlox search API."""
-    url = f"https://scriptblox.com/api/script/search?q={urllib.parse.quote(query)}"
-    if mode:
-        url += f"&mode={mode}"
-        
+def parse_real_features(raw_features: str, title: str, game_name: str) -> str:
+    """Extracts genuine, specific features from ScriptBlox description instead of generic text."""
+    if raw_features:
+        lines = [l.strip() for l in raw_features.split("\n") if l.strip()]
+        cleaned = []
+        for l in lines:
+            # Bullet or arrow lines
+            if l.startswith(("•", "-", "*", "»", ">", "+")):
+                c = l.lstrip("•-*»>+ ").strip()
+                if c and len(c) > 3 and not any(bad in c.lower() for bad in ["discord", "youtube", "subscribe", "key", "link"]):
+                    cleaned.append(f"• {c}")
+            elif len(cleaned) < 5 and 5 < len(l) < 90:
+                low = l.lower()
+                if not any(bad in low for bad in ["http", "discord", "credits", "support", "version", "update", "game", "script"]):
+                    cleaned.append(f"• {l}")
+                    
+        if len(cleaned) >= 2:
+            return "\n".join(cleaned[:5])
+
+    # Fallback to AI features tuned for this specific game
+    return post_builder.generate_ai_features(game_name)
+
+def _fetch_scriptblox_sync(query: str) -> List[Dict[str, Any]]:
+    url = f"https://scriptblox.com/api/script/search?q={urllib.parse.quote(query)}&mode=free"
     req = urllib.request.Request(
         url,
         headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
@@ -128,22 +130,33 @@ def _fetch_scriptblox_sync(query: str, mode: str = "free") -> List[Dict[str, Any
         logger.warning(f"Error fetching ScriptBlox for '{query}': {e}")
         return []
 
+def _fetch_single_scriptblox_details(slug: str) -> Dict[str, Any]:
+    url = f"https://scriptblox.com/api/script/{slug}"
+    req = urllib.request.Request(
+        url,
+        headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=5) as response:
+            data = json.loads(response.read().decode("utf-8"))
+            return data.get("script", {})
+    except Exception as e:
+        logger.warning(f"Error fetching script details for slug '{slug}': {e}")
+        return {}
+
 async def search_scripts_online(game_query: str) -> List[Dict[str, Any]]:
     """
-    Comprehensive multi-source internet search for Roblox scripts:
-    1. Translates Russian / acronym queries into English game names.
-    2. Searches PulseHub verified loaders.
-    3. Searches ScriptBlox across multiple queries (both free mode and keyless).
-    4. Ranks game-specific scripts ahead of generic hubs.
-    5. Applies strict anti-RAT security filter on all results.
+    Returns EXACTLY 2 of the HIGHEST-RATED, working scripts for the requested game.
+    Extracts real unique features and cheat GUI screenshots.
     """
     raw_query = game_query.strip().lower()
     clean_query = SYNONYMS.get(raw_query, raw_query)
-    
+
+    loop = asyncio.get_running_loop()
     results: List[Dict[str, Any]] = []
     seen_codes = set()
 
-    # 1. Search in PulseHub
+    # 1. Check PulseHub (if key matches directly)
     for k, v in PULSEHUB_GAMES.items():
         if k in clean_query or clean_query in k:
             results.append({
@@ -154,30 +167,15 @@ async def search_scripts_online(game_query: str) -> List[Dict[str, Any]]:
                 "is_verified": True,
                 "features": post_builder.generate_ai_features(v["game_name"]),
                 "safety_note": "Проверено: 100% чистый скрипт без ключа (PulseHub)",
+                "image_url": v.get("image_url"),
             })
             seen_codes.add(v["script_code"].strip())
             break
 
-    # 2. Multi-query Search on ScriptBlox (runs in background executor)
-    loop = asyncio.get_running_loop()
-    
-    # Query 1: Clean query free mode
-    # Query 2: If query had alias, also search raw query
-    queries_to_run = [clean_query]
-    if raw_query != clean_query:
-        queries_to_run.append(raw_query)
+    # 2. Search ScriptBlox online
+    raw_candidates = await loop.run_in_executor(None, _fetch_scriptblox_sync, clean_query)
 
-    raw_candidates: List[Dict[str, Any]] = []
-    for q in queries_to_run:
-        data = await loop.run_in_executor(None, _fetch_scriptblox_sync, q, "free")
-        raw_candidates.extend(data)
-        if len(raw_candidates) >= 15:
-            break
-
-    # Separate candidates: direct game match vs generic hubs
-    direct_match_scripts = []
-    general_hub_scripts = []
-
+    candidates = []
     for item in raw_candidates:
         if item.get("isPatched", False):
             continue
@@ -187,51 +185,72 @@ async def search_scripts_online(game_query: str) -> List[Dict[str, Any]]:
         if not script_code or script_code.strip() in seen_codes:
             continue
 
-        # Strict Security Scan (No RAT, No Webhooks, No Stealers)
         is_safe, reason = check_script_safety(script_code, title)
         if not is_safe:
             logger.warning(f"Rejected unsafe script '{title}': {reason}")
             continue
 
         seen_codes.add(script_code.strip())
+        candidates.append(item)
+
+    # Sort candidates by relevance:
+    # 1. Exact game match in title or game.name
+    # 2. Verified status
+    # 3. Like count
+    def score_script(item):
+        t = item.get("title", "").lower()
+        g = item.get("game", {}).get("name", "").lower() if isinstance(item.get("game"), dict) else ""
+        is_direct = (clean_query in t) or (clean_query in g)
+        is_verified = bool(item.get("verified", False))
+        likes = item.get("likeCount", 0)
+        return (is_direct, is_verified, likes)
+
+    candidates.sort(key=score_script, reverse=True)
+
+    # Take up to 2 best scripts (or 1 if PulseHub was already added)
+    needed = 2 - len(results)
+    top_items = candidates[:needed]
+
+    for item in top_items:
+        slug = item.get("slug")
+        details = {}
+        if slug:
+            details = await loop.run_in_executor(None, _fetch_single_scriptblox_details, slug)
 
         game_data = item.get("game", {})
         game_name_raw = game_data.get("name") if isinstance(game_data, dict) else None
         
         is_hub = item.get("isHub", False) or (game_name_raw and game_name_raw.lower() in ["script hub", "universal"])
-        
         if game_name_raw and not is_hub:
             formatted_game = post_builder.format_game_name(game_name_raw)
         else:
             formatted_game = post_builder.format_game_name(clean_query)
 
+        # Extract real cheat menu screenshot
+        img = details.get("image") or item.get("image")
+        image_url = None
+        if img and "no-script" not in img and "no-image" not in img:
+            image_url = f"https://scriptblox.com{img}" if img.startswith("/") else img
+        elif game_data and game_data.get("imageUrl") and "no-script" not in game_data.get("imageUrl", ""):
+            image_url = game_data.get("imageUrl")
+
+        # Extract real features
+        raw_feat = details.get("features", "")
+        parsed_features = parse_real_features(raw_feat, item.get("title", ""), formatted_game)
+
         is_verified = bool(item.get("verified", False))
         likes = item.get("likeCount", 0)
 
-        entry = {
-            "title": title,
+        results.append({
+            "title": item.get("title", "Roblox Script"),
             "game_name": formatted_game,
-            "script_code": script_code,
+            "script_code": item.get("script", ""),
             "source": f"ScriptBlox ({'Verified' if is_verified else 'Free'}, {likes} likes)",
             "is_verified": is_verified,
-            "features": post_builder.generate_ai_features(formatted_game),
+            "features": parsed_features,
             "safety_note": "Проверено: чистый loadstring, без RAT и стилеров",
-        }
+            "image_url": image_url,
+        })
 
-        # Check if title or game name contains query directly
-        t_low = title.lower()
-        if clean_query in t_low or (game_name_raw and clean_query in game_name_raw.lower()):
-            direct_match_scripts.append(entry)
-        else:
-            general_hub_scripts.append(entry)
-
-    # Sort direct matches: verified first
-    direct_match_scripts.sort(key=lambda x: (not x["is_verified"]))
-    general_hub_scripts.sort(key=lambda x: (not x["is_verified"]))
-
-    # Add direct matches first, then general hubs up to 6 results
-    results.extend(direct_match_scripts)
-    if len(results) < 6:
-        results.extend(general_hub_scripts[:(6 - len(results))])
-
-    return results
+    # Return exactly top 2
+    return results[:2]

@@ -175,7 +175,38 @@ async def handle_start(message: Message, command: CommandObject):
         script = await database.get_script(script_key)
         
         if not script:
-            await message.answer("⚠️ <b>Скрипт не найден</b> или срок его действия истёк.")
+            clean_arg = script_key.lower().replace("_", " ").replace("-", " ")
+            logger.info(f"Script '{script_key}' not found immediately. Recovering online for '{clean_arg}'...")
+            status_wait = await message.answer("🔄 <i>Загружаю актуальную версию скрипта...</i>")
+            recovered = await script_finder.search_scripts_online(clean_arg)
+            try:
+                await status_wait.delete()
+            except Exception:
+                pass
+            if recovered:
+                best = recovered[0]
+                await database.add_script(
+                    game_name=best["game_name"],
+                    features=best["features"],
+                    script_code=best["script_code"],
+                    executors=post_builder.DEFAULT_EXECUTORS,
+                    image_url=best.get("image_url"),
+                    custom_key=script_key
+                )
+                script = await database.get_script(script_key)
+
+        if not script:
+            search_kb = InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [InlineKeyboardButton(text="📢 Искать в канале @script_drop", url=channel_url)],
+                    [InlineKeyboardButton(text="📱 Открыть приложение", web_app=WebAppInfo(url=get_webapp_url()))],
+                ]
+            )
+            await message.answer(
+                "⚠️ <b>Скрипт обновляется или временно перемещён.</b>\n\n"
+                "Вы можете найти рабочий скрипт прямо в нашем канале или написав боту название игры! 👇",
+                reply_markup=search_kb
+            )
             return
 
         # Check subscription
@@ -302,7 +333,22 @@ async def handle_check_subscription(call: CallbackQuery):
     # Deliver script
     script = await database.get_script(target)
     if not script:
-        await call.message.answer("⚠️ Скрипт не найден или был удалён.")
+        clean_target = target.lower().replace("_", " ").replace("-", " ")
+        recovered = await script_finder.search_scripts_online(clean_target)
+        if recovered:
+            best = recovered[0]
+            await database.add_script(
+                game_name=best["game_name"],
+                features=best["features"],
+                script_code=best["script_code"],
+                executors=post_builder.DEFAULT_EXECUTORS,
+                image_url=best.get("image_url"),
+                custom_key=target
+            )
+            script = await database.get_script(target)
+
+    if not script:
+        await call.message.answer("⚠️ Скрипт обновляется или временно недоступен. Напишите боту название игры для поиска!")
         return
 
     await database.record_user_received(user_id, target)
@@ -533,11 +579,21 @@ async def publish_to_channel(call: CallbackQuery):
     )
 
     try:
-        if config.BANNER_PATH.exists():
-            photo = FSInputFile(config.BANNER_PATH)
-            sent = await bot.send_photo(chat_id=channel, photo=photo, caption=post_text, reply_markup=post_kb)
-        else:
-            sent = await bot.send_message(chat_id=channel, text=post_text, reply_markup=post_kb)
+        sent = None
+        photo_url = script.get("image_url")
+        if photo_url and photo_url.startswith("http"):
+            try:
+                sent = await bot.send_photo(chat_id=channel, photo=photo_url, caption=post_text, reply_markup=post_kb)
+            except Exception as pe:
+                logger.warning(f"Could not send photo_url {photo_url}: {pe}")
+                
+        if not sent:
+            if config.BANNER_PATH.exists():
+                photo = FSInputFile(config.BANNER_PATH)
+                sent = await bot.send_photo(chat_id=channel, photo=photo, caption=post_text, reply_markup=post_kb)
+            else:
+                sent = await bot.send_message(chat_id=channel, text=post_text, reply_markup=post_kb)
+                
         await database.update_script_channel_post(script_key, sent.message_id)
         await call.answer("✅ Пост успешно опубликован в канал!", show_alert=True)
     except Exception as e:
@@ -891,10 +947,10 @@ async def process_admin_search_query(message: Message, state: FSMContext):
     _SEARCH_CACHE[user_id] = results
     await state.clear()
 
-    await message.answer(f"🎉 <b>Найдено рабочих скриптов: {len(results)}</b>\nВыберите действие под любым из них:")
+    await message.answer(f"🎉 <b>Найдено лучших проверенных скриптов: {len(results[:2])}</b>\nВыберите действие под любым из них:")
 
     import html as html_lib
-    for idx, item in enumerate(results[:4]):
+    for idx, item in enumerate(results[:2]):
         preview_code = item['script_code']
         if len(preview_code) > 120:
             preview_display = preview_code[:115] + "..."
@@ -906,18 +962,29 @@ async def process_admin_search_query(message: Message, state: FSMContext):
             f"📝 <b>Скрипт:</b> {item['title']}\n"
             f"🌐 <b>Источник:</b> {item['source']}\n"
             f"🛡 <b>Безопасность:</b> 🟢 <i>{item['safety_note']}</i>\n\n"
-            f"🛠 <b>Функционал (ИИ анализ):</b>\n"
+            f"🛠 <b>Реальный функционал чита:</b>\n"
             f"{item['features']}\n\n"
             f"📜 <b>Код:</b>\n<code>{html_lib.escape(preview_display)}</code>"
         )
 
         card_kb = InlineKeyboardMarkup(
             inline_keyboard=[
-                [InlineKeyboardButton(text="📢 Опубликовать в канал в 1 клик", callback_data=f"pub_found:{idx}")],
+                [InlineKeyboardButton(text="📢 Опубликовать в канал (с фото чита)", callback_data=f"pub_found:{idx}")],
                 [InlineKeyboardButton(text="💾 Только сохранить в базу", callback_data=f"save_found:{idx}")],
             ]
         )
-        await message.answer(card_text, reply_markup=card_kb)
+
+        img_url = item.get("image_url")
+        sent_card = False
+        if img_url and img_url.startswith("http"):
+            try:
+                await message.answer_photo(photo=img_url, caption=card_text, reply_markup=card_kb)
+                sent_card = True
+            except Exception as pe:
+                logger.warning(f"Could not send card with photo {img_url}: {pe}")
+
+        if not sent_card:
+            await message.answer(card_text, reply_markup=card_kb)
 
 
 @dp.callback_query(F.data.startswith("pub_found:"))
@@ -940,12 +1007,13 @@ async def callback_publish_found(call: CallbackQuery):
         await call.answer("⚠️ Канал ещё не привязан!", show_alert=True)
         return
 
-    # 1. Save to database
+    # 1. Save to database with image_url
     script_key = await database.add_script(
         game_name=item["game_name"],
         features=item["features"],
         script_code=item["script_code"],
         executors=post_builder.DEFAULT_EXECUTORS,
+        image_url=item.get("image_url"),
     )
 
     # 2. Build channel post
@@ -964,13 +1032,22 @@ async def callback_publish_found(call: CallbackQuery):
         ]
     )
 
-    # 3. Publish to channel
+    # 3. Publish to channel with cheat GUI screenshot if available
     try:
-        if config.BANNER_PATH.exists():
-            photo = FSInputFile(config.BANNER_PATH)
-            sent = await bot.send_photo(chat_id=channel, photo=photo, caption=post_text, reply_markup=post_kb)
-        else:
-            sent = await bot.send_message(chat_id=channel, text=post_text, reply_markup=post_kb)
+        sent = None
+        photo_url = item.get("image_url")
+        if photo_url and photo_url.startswith("http"):
+            try:
+                sent = await bot.send_photo(chat_id=channel, photo=photo_url, caption=post_text, reply_markup=post_kb)
+            except Exception as pe:
+                logger.warning(f"Could not send photo {photo_url} to channel: {pe}")
+
+        if not sent:
+            if config.BANNER_PATH.exists():
+                photo = FSInputFile(config.BANNER_PATH)
+                sent = await bot.send_photo(chat_id=channel, photo=photo, caption=post_text, reply_markup=post_kb)
+            else:
+                sent = await bot.send_message(chat_id=channel, text=post_text, reply_markup=post_kb)
 
         await database.update_script_channel_post(script_key, sent.message_id)
         channel_clean = channel.replace("@", "")
@@ -1016,6 +1093,7 @@ async def callback_save_found(call: CallbackQuery):
         features=item["features"],
         script_code=item["script_code"],
         executors=post_builder.DEFAULT_EXECUTORS,
+        image_url=item.get("image_url"),
     )
 
     bot_info = await bot.get_me()
@@ -1030,7 +1108,37 @@ async def callback_save_found(call: CallbackQuery):
     await call.answer("Сохранено!")
 
 
-# --- CHANGELOG PUBLISHER ---
+# --- CHANGELOG PUBLISHER & STYLE SWITCHER ---
+
+def build_changelog_preview_kb(current_style: str = "cyber") -> InlineKeyboardMarkup:
+    """Builds interactive style switcher keyboard for changelog preview."""
+    styles = [
+        ("cyber", "⚡ Кибер"),
+        ("hype", "🔥 Хайп"),
+        ("minimal", "💎 Минимал"),
+        ("dev", "🛠 Dev"),
+    ]
+    style_buttons = []
+    for s_key, s_label in styles:
+        label = f"✅ {s_label}" if s_key == current_style else s_label
+        style_buttons.append(InlineKeyboardButton(text=label, callback_data=f"cl_style:{s_key}"))
+
+    active_name = dict(styles).get(current_style, "⚡ Кибер")
+
+    keyboard = [
+        style_buttons,
+        [
+            InlineKeyboardButton(text="🎲 Другой стиль (Случайно)", callback_data=f"cl_random:{current_style}")
+        ],
+        [
+            InlineKeyboardButton(text=f"🚀 Опубликовать в канал ({active_name})", callback_data=f"cl_publish:{current_style}")
+        ],
+        [
+            InlineKeyboardButton(text="◀️ Назад в админку", callback_data="open_admin_panel")
+        ]
+    ]
+    return InlineKeyboardMarkup(inline_keyboard=keyboard)
+
 
 @dp.callback_query(F.data == "admin_post_changelog")
 async def prompt_post_changelog(call: CallbackQuery):
@@ -1040,38 +1148,114 @@ async def prompt_post_changelog(call: CallbackQuery):
 
     bot_info = await bot.get_me()
     bot_user = bot_info.username or config.BOT_USERNAME
-    changelog_text = post_builder.build_changelog_post_text(bot_user)
-
-    kb = InlineKeyboardMarkup(
-        inline_keyboard=[
-            [InlineKeyboardButton(text="🚀 Опубликовать и закрепить в канале", callback_data="do_post_changelog")],
-            [InlineKeyboardButton(text="◀️ Назад в меню", callback_data="open_admin_panel")],
-        ]
-    )
+    default_style = "cyber"
+    changelog_text = post_builder.get_changelog_text(default_style, bot_user)
+    kb = build_changelog_preview_kb(default_style)
 
     preview_banner = getattr(config, "BANNER_UPDATE", None)
     banner_to_use = preview_banner if (preview_banner and preview_banner.exists()) else config.BANNER_PATH
+
+    caption = (
+        f"📢 <b>Предпросмотр поста обновления (Стиль: ⚡ Кибер):</b>\n\n"
+        f"{changelog_text}\n\n"
+        f"<i>💡 Нажимайте кнопки ниже, чтобы переключить стиль текста!</i>"
+    )
 
     if banner_to_use.exists():
         photo = FSInputFile(banner_to_use)
         await call.message.answer_photo(
             photo=photo,
-            caption=f"📢 <b>Предпросмотр поста с обновлением:</b>\n\n{changelog_text}",
+            caption=caption,
             reply_markup=kb,
         )
     else:
         await call.message.answer(
-            f"📢 <b>Предпросмотр поста с обновлением:</b>\n\n{changelog_text}",
+            caption,
             reply_markup=kb,
         )
     await call.answer()
 
 
-@dp.callback_query(F.data == "do_post_changelog")
+@dp.callback_query(F.data.startswith("cl_style:"))
+async def handle_changelog_style_change(call: CallbackQuery):
+    if not await is_admin(call.from_user.id):
+        await call.answer("⛔ Нет доступа", show_alert=True)
+        return
+
+    new_style = call.data.split(":")[1]
+    bot_info = await bot.get_me()
+    bot_user = bot_info.username or config.BOT_USERNAME
+    changelog_text = post_builder.get_changelog_text(new_style, bot_user)
+    kb = build_changelog_preview_kb(new_style)
+
+    style_meta = post_builder.CHANGELOG_STYLES.get(new_style, {})
+    style_name = style_meta.get("full_name", new_style)
+
+    new_caption = (
+        f"📢 <b>Предпросмотр поста обновления (Стиль: {style_name}):</b>\n\n"
+        f"{changelog_text}\n\n"
+        f"<i>💡 Нажимайте кнопки ниже, чтобы переключить стиль текста!</i>"
+    )
+
+    try:
+        if call.message.photo:
+            await call.message.edit_caption(caption=new_caption, reply_markup=kb)
+        else:
+            await call.message.edit_text(text=new_caption, reply_markup=kb)
+        await call.answer(f"Выбран стиль: {style_meta.get('name', new_style)}")
+    except Exception as e:
+        # Ignore Telegram 'message is not modified' error if user re-clicks same button
+        await call.answer()
+
+
+@dp.callback_query(F.data.startswith("cl_random"))
+async def handle_changelog_random_style(call: CallbackQuery):
+    if not await is_admin(call.from_user.id):
+        await call.answer("⛔ Нет доступа", show_alert=True)
+        return
+
+    parts = call.data.split(":")
+    curr = parts[1] if len(parts) > 1 else "cyber"
+    all_styles = list(post_builder.CHANGELOG_STYLES.keys())
+    available = [s for s in all_styles if s != curr]
+    
+    import random
+    next_style = random.choice(available) if available else "cyber"
+
+    bot_info = await bot.get_me()
+    bot_user = bot_info.username or config.BOT_USERNAME
+    changelog_text = post_builder.get_changelog_text(next_style, bot_user)
+    kb = build_changelog_preview_kb(next_style)
+
+    style_meta = post_builder.CHANGELOG_STYLES.get(next_style, {})
+    style_name = style_meta.get("full_name", next_style)
+
+    new_caption = (
+        f"📢 <b>Предпросмотр поста обновления (Стиль: {style_name}):</b>\n\n"
+        f"{changelog_text}\n\n"
+        f"<i>💡 Нажимайте кнопки ниже, чтобы переключить стиль текста!</i>"
+    )
+
+    try:
+        if call.message.photo:
+            await call.message.edit_caption(caption=new_caption, reply_markup=kb)
+        else:
+            await call.message.edit_text(text=new_caption, reply_markup=kb)
+        await call.answer(f"Случайный стиль: {style_meta.get('name', next_style)}")
+    except Exception:
+        await call.answer()
+
+
+@dp.callback_query(F.data.startswith("cl_publish:") | (F.data == "do_post_changelog"))
 async def execute_post_changelog(call: CallbackQuery):
     if not await is_admin(call.from_user.id):
         await call.answer("⛔ Нет доступа", show_alert=True)
         return
+
+    if ":" in call.data:
+        chosen_style = call.data.split(":")[1]
+    else:
+        chosen_style = "cyber"
 
     channel = await database.get_setting("channel_id", config.CHANNEL_ID)
     if not channel:
@@ -1081,7 +1265,7 @@ async def execute_post_changelog(call: CallbackQuery):
     bot_info = await bot.get_me()
     bot_user = bot_info.username or config.BOT_USERNAME
     channel_clean = channel.replace("@", "")
-    changelog_text = post_builder.build_changelog_post_text(bot_user)
+    changelog_text = post_builder.get_changelog_text(chosen_style, bot_user)
 
     changelog_kb = InlineKeyboardMarkup(
         inline_keyboard=[
@@ -1106,8 +1290,23 @@ async def execute_post_changelog(call: CallbackQuery):
             logger.warning(f"Could not pin changelog: {e}")
 
         await database.set_setting("last_changelog_message_id", str(sent.message_id))
-        await call.message.answer(f"🎉 <b>Changelog 2.0 успешно опубликован и закреплен в @{channel_clean}!</b>")
-        await call.answer("✅ Готово!")
+        post_url = f"https://t.me/{channel_clean}/{sent.message_id}"
+
+        confirm_kb = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [InlineKeyboardButton(text="🚀 Посмотреть пост в канале ↗", url=post_url)],
+                [InlineKeyboardButton(text="👑 В меню админа", callback_data="open_admin_panel")],
+            ]
+        )
+
+        style_name = post_builder.CHANGELOG_STYLES.get(chosen_style, {}).get("name", chosen_style)
+        await call.message.answer(
+            f"🎉 <b>Changelog 2.0 (стиль: {style_name}) успешно опубликован и закреплён в @{channel_clean}!</b>\n\n"
+            f"Ссылка на пост: <a href=\"{post_url}\">{post_url}</a>",
+            reply_markup=confirm_kb,
+            disable_web_page_preview=True
+        )
+        await call.answer("✅ Опубликовано в канал!")
     except Exception as e:
         logger.error(f"Error posting changelog: {e}")
         await call.message.answer(f"❌ <b>Ошибка при публикации Changelog:</b>\n<code>{e}</code>")
@@ -1132,6 +1331,22 @@ async def handle_user_search(message: Message, state: FSMContext):
     bot_user = bot_info.username or config.BOT_USERNAME
 
     results = await database.search_scripts(text, limit=5)
+    if not results:
+        # Dynamic online fallback so user always gets working scripts
+        online_res = await script_finder.search_scripts_online(text)
+        if online_res:
+            best = online_res[0]
+            new_key = await database.add_script(
+                game_name=best["game_name"],
+                features=best["features"],
+                script_code=best["script_code"],
+                executors=post_builder.DEFAULT_EXECUTORS,
+                image_url=best.get("image_url")
+            )
+            saved_item = await database.get_script(new_key)
+            if saved_item:
+                results = [saved_item]
+
     if not results:
         kb = InlineKeyboardMarkup(
             inline_keyboard=[
@@ -1174,7 +1389,17 @@ async def handle_user_search(message: Message, state: FSMContext):
     if not channel_msg_id:
         kb_buttons.append([InlineKeyboardButton(text="📢 Наш канал со скриптами ↗", url=f"https://t.me/{channel_clean}")])
 
-    await message.answer(msg_text, reply_markup=InlineKeyboardMarkup(inline_keyboard=kb_buttons))
+    photo_url = latest.get("image_url")
+    sent = False
+    if photo_url and photo_url.startswith("http"):
+        try:
+            await message.answer_photo(photo=photo_url, caption=msg_text, reply_markup=InlineKeyboardMarkup(inline_keyboard=kb_buttons))
+            sent = True
+        except Exception:
+            pass
+
+    if not sent:
+        await message.answer(msg_text, reply_markup=InlineKeyboardMarkup(inline_keyboard=kb_buttons))
 
 # --- DAILY INTERACTIVE POLL (12:00 GMT+5) ---
 
