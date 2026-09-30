@@ -144,6 +144,20 @@ KNOWN_GAMES_FEATURES = {
         "• ESP Killer & Survivor (ВХ на маньяка и выживших)\n"
         "• Instant Heal & Speed (Мгновенное лечение и скорость)"
     ),
+    "99 nights in the forest": (
+        "• ESP (ВХ на монстров, выживших, лагерь и лут)\n"
+        "• Unlimited Health / Godmode (Бессмертие и защита от урона)\n"
+        "• Infinite Saplings & Auto Farm (Бесконечные саженцы и авто-фарм)\n"
+        "• Auto Eat & Food Selection (Авто-еда и выбор припасов)\n"
+        "• Fly, Noclip, Speed & Teleport (Полёт сквозь стены и быстрый ТП)"
+    ),
+    "99 ночей": (
+        "• ESP (ВХ на монстров, выживших, лагерь и лут)\n"
+        "• Unlimited Health / Godmode (Бессмертие и защита от урона)\n"
+        "• Infinite Saplings & Auto Farm (Бесконечные саженцы и авто-фарм)\n"
+        "• Auto Eat & Food Selection (Авто-еда и выбор припасов)\n"
+        "• Fly, Noclip, Speed & Teleport (Полёт сквозь стены и быстрый ТП)"
+    ),
 }
 
 def generate_ai_features(game_name: str) -> str:

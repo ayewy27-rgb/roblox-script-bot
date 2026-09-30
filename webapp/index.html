@@ -627,13 +627,18 @@
       }
     }
 
+    function getUserId() {
+      const urlParams = new URLSearchParams(window.location.search);
+      return tg?.initDataUnsafe?.user?.id || urlParams.get('user_id') || 0;
+    }
+
     // Check Status Button with Spin Animation
     document.getElementById('btn-check').addEventListener('click', async () => {
       const icon = document.getElementById('status-icon');
       icon.innerHTML = `<svg viewBox="0 0 24 24" width="22" height="22" stroke="var(--text-muted)" stroke-width="2.5" fill="none"><circle cx="12" cy="12" r="10" stroke-opacity="0.25"/><path d="M12 2 A10 10 0 0 1 22 12" /></svg>`;
       icon.classList.add('spin');
 
-      const userId = tg?.initDataUnsafe?.user?.id;
+      const userId = getUserId();
       let isSubscribed = true;
 
       if (userId) {
@@ -675,7 +680,7 @@
       const counter = document.getElementById('scripts-counter');
 
       try {
-        const userId = tg?.initDataUnsafe?.user?.id || 0;
+        const userId = getUserId();
         const res = await fetch(`/api/scripts?user_id=${userId}`);
         const list = await res.json();
 

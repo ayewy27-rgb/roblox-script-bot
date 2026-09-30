@@ -27,103 +27,6 @@ PULSEHUB_GAMES = {
         ),
         "image_url": "https://pulsehub.gg/og.png",
     },
-    "steal an egg": {
-        "title": "Pulse Hub | Steal an Egg (Auto Steal, Auto Fuse & ESP)",
-        "game_name": "Steal an Egg",
-        "script_code": PULSEHUB_LOADER_CODE,
-        "source": "PulseHub.gg (Официальный)",
-        "features": (
-            "• Auto Steal by Rarity, Income & Weight (Кража редких яиц)\n"
-            "• Steal Big Eggs mode (Кража огромных яиц по весу)\n"
-            "• Anti Traps & Auto Escape Treadmill (Обход всех ловушек)\n"
-            "• Hungry Monster Event Auto Farm (Авто-фарм ивента Монстра)\n"
-            "• Auto Fuse & Auto Sell (Слияние и авто-продажа питомцев)\n"
-            "• Full Egg ESP, Plot ESP & Player ESP (ВХ на яйца и базы)\n"
-            "• Fly & Waypoint Teleport (Свободный полёт и телепорт)"
-        ),
-        "image_url": "https://pulsehub.gg/assets/art/steal-an-egg.webp",
-    },
-    "mm2": {
-        "title": "Pulse Hub | Murder Mystery 2 (Silent Aim, Coin Farm & ESP)",
-        "game_name": "Murder Mystery 2",
-        "script_code": PULSEHUB_LOADER_CODE,
-        "source": "PulseHub.gg (Официальный)",
-        "features": (
-            "• Role ESP (ВХ на маньяка, шерифа, выпавший пистолет)\n"
-            "• Silent Aim & Knife Throw Aimbot (Скрытый аимбот)\n"
-            "• Kill Aura & Auto Shoot Murderer (Авто-убийство маньяка)\n"
-            "• Auto Farm Coins (Молниеносный сбор монет с авто-уклонением)\n"
-            "• Fly, Noclip, Infinite Jump & Desync (Свободный полёт)"
-        ),
-        "image_url": "https://pulsehub.gg/assets/art/mm2.webp",
-    },
-    "rivals": {
-        "title": "Pulse Hub | RIVALS (Silent Aim, Skeleton ESP, No Recoil)",
-        "game_name": "Rivals",
-        "script_code": PULSEHUB_LOADER_CODE,
-        "source": "PulseHub.gg (Официальный)",
-        "features": (
-            "• Silent Aim with FOV & Prediction (Скрытый аимбот в голову)\n"
-            "• 2D Box & Skeleton ESP (ВХ сквозь любые стены с HP)\n"
-            "• No Recoil, No Spread & Rapid Fire (Стрельба без отдачи)\n"
-            "• Auto Shoot / TriggerBot (Авто-выстрел при наведении)\n"
-            "• BunnyHop & Speed Boost (Распрыжка и скорость)"
-        ),
-        "image_url": "https://pulsehub.gg/assets/art/rivals.webp",
-    },
-    "bloxstrike": {
-        "title": "Pulse Hub | BloxStrike (Legit/Silent Aim, Skin Changer, ESP)",
-        "game_name": "BloxStrike",
-        "script_code": PULSEHUB_LOADER_CODE,
-        "source": "PulseHub.gg (Официальный)",
-        "features": (
-            "• Legit & Silent Aim с профилями под каждое оружие\n"
-            "• Skin Changer (Все скины на ножи, перчатки и оружие)\n"
-            "• ESP Boxes, Chams & Skeleton (Полный ВХ)\n"
-            "• Grenade Helper & Bomb Defuse Timer (Траектория гранат)\n"
-            "• Auto Buy (Авто-закупка брони и оружия)"
-        ),
-        "image_url": "https://pulsehub.gg/assets/icons/blox-strike.webp",
-    },
-    "san diego": {
-        "title": "Pulse Hub | San Diego Border RP (Auto Smuggle & Tuning)",
-        "game_name": "San Diego Border Roleplay",
-        "script_code": PULSEHUB_LOADER_CODE,
-        "source": "PulseHub.gg (Официальный)",
-        "features": (
-            "• Auto Smuggle (Полный цикл авто-контрабанды с продажей)\n"
-            "• Garage & Car Tuning (Тюнинг машин, скорость, полный привод)\n"
-            "• Silent Aim & Wall Shot (Стрельба сквозь препятствия)\n"
-            "• Vehicle & Player ESP (Подсветка машин и игроков)"
-        ),
-        "image_url": "https://pulsehub.gg/assets/art/san-diego.webp",
-    },
-    "grow a garden": {
-        "title": "Pulse Hub | Grow A Garden 2 (Auto Farm, Auto Sell, ESP)",
-        "game_name": "Grow A Garden 2",
-        "script_code": PULSEHUB_LOADER_CODE,
-        "source": "PulseHub.gg (Официальный)",
-        "features": (
-            "• Auto Harvest & Plant (Авто-сбор урожая и посадка растений)\n"
-            "• Auto Sell & Max Profit (Авто-продажа по максимальной цене)\n"
-            "• Plot & Rare Seeds ESP (ВХ на редкие семена и участки)\n"
-            "• Speed Boost & Teleport (Увеличенная скорость и телепорт)"
-        ),
-        "image_url": "https://pulsehub.gg/og.png",
-    },
-    "+1 speed": {
-        "title": "Pulse Hub | +1 Speed Keyboard Escape (Auto Win, Speed)",
-        "game_name": "+1 Speed Keyboard Escape",
-        "script_code": PULSEHUB_LOADER_CODE,
-        "source": "PulseHub.gg (Официальный)",
-        "features": (
-            "• Auto Farm Wins (Автоматический фарм побед)\n"
-            "• Infinite Speed Multiplier (Бесконечный множитель скорости)\n"
-            "• Skip Obstacles & Noclip (Прохождение любых препятствий)\n"
-            "• Godmode (Защита от падений и лавы)"
-        ),
-        "image_url": "https://pulsehub.gg/og.png",
-    },
 }
 
 SYNONYMS = {
@@ -175,6 +78,10 @@ SYNONYMS = {
     "форсакен": "forsaken",
     "сан диего": "san diego",
     "сандьего": "san diego",
+    "99 ночей": "99 nights in the forest",
+    "99 ночей в лесу": "99 nights in the forest",
+    "99 nights": "99 nights in the forest",
+    "99 nights in the forest": "99 nights in the forest",
 }
 
 DANGEROUS_PATTERNS = [
@@ -263,21 +170,21 @@ async def search_scripts_online(game_query: str) -> List[Dict[str, Any]]:
     results: List[Dict[str, Any]] = []
     seen_codes = set()
 
-    # 1. Check PulseHub (if key matches directly)
-    for k, v in PULSEHUB_GAMES.items():
-        if k in clean_query or clean_query in k:
-            results.append({
-                "title": v["title"],
-                "game_name": v["game_name"],
-                "script_code": v["script_code"],
-                "source": v["source"],
-                "is_verified": True,
-                "features": v.get("features") or post_builder.generate_ai_features(v["game_name"]),
-                "safety_note": "Проверено: 100% чистый скрипт без ключа (PulseHub)",
-                "image_url": v.get("image_url"),
-            })
-            seen_codes.add(v["script_code"].strip())
-            break
+    # 1. Check PulseHub (ONLY if user explicitly asks for pulsehub / universal loader)
+    pulse_keywords = ["pulsehub", "pulse", "пульс", "пульсхаб", "лоадер", "loader", "все в одном", "всев одном", "универсальный", "универсал"]
+    if clean_query in pulse_keywords:
+        v = PULSEHUB_GAMES["pulsehub"]
+        results.append({
+            "title": v["title"],
+            "game_name": v["game_name"],
+            "script_code": v["script_code"],
+            "source": v["source"],
+            "is_verified": True,
+            "features": v.get("features") or post_builder.generate_ai_features(v["game_name"]),
+            "safety_note": "Проверено: 100% чистый скрипт без ключа (PulseHub)",
+            "image_url": v.get("image_url"),
+        })
+        return results
 
     # 2. Search ScriptBlox online
     raw_candidates = await loop.run_in_executor(None, _fetch_scriptblox_sync, clean_query)
@@ -296,6 +203,17 @@ async def search_scripts_online(game_query: str) -> List[Dict[str, Any]]:
         if not is_safe:
             logger.warning(f"Rejected unsafe script '{title}': {reason}")
             continue
+
+        # Filter out dead / 404 links
+        urls = re.findall(r'https?://[^\s\"\'\)]+', script_code)
+        if urls and "rawscripts.net" in urls[0]:
+            try:
+                test_req = urllib.request.Request(urls[0], headers={"User-Agent": "Mozilla/5.0"})
+                with urllib.request.urlopen(test_req, timeout=3) as test_resp:
+                    if test_resp.status != 200:
+                        continue
+            except Exception:
+                continue
 
         seen_codes.add(script_code.strip())
         candidates.append(item)

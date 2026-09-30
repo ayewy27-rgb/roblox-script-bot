@@ -127,10 +127,13 @@ async def check_user_subscription(user_id: int, channel: str) -> bool:
         logger.error(f"Unexpected error in subscription check: {e}")
         return False
 
-def get_webapp_url() -> str:
+def get_webapp_url(user_id: int = 0) -> str:
     url = os.getenv("RENDER_EXTERNAL_URL") or os.getenv("WEBAPP_URL") or getattr(config, "WEBAPP_URL", "")
     if not url or "vercel.app" in url:
-        return "https://roblox-script-bot.onrender.com"
+        url = "https://roblox-script-bot.onrender.com"
+    if user_id and user_id > 0:
+        sep = "&" if "?" in url else "?"
+        return f"{url}{sep}user_id={user_id}"
     return url
 
 def get_admin_menu_keyboard() -> InlineKeyboardMarkup:
@@ -221,7 +224,7 @@ async def handle_start(message: Message, command: CommandObject):
             search_kb = InlineKeyboardMarkup(
                 inline_keyboard=[
                     [InlineKeyboardButton(text="📢 Искать в канале @script_drop", url=channel_url)],
-                    [InlineKeyboardButton(text="📱 Открыть приложение", web_app=WebAppInfo(url=get_webapp_url()))],
+                    [InlineKeyboardButton(text="📱 Открыть приложение", web_app=WebAppInfo(url=get_webapp_url(user_id)))],
                 ]
             )
             await message.answer(
@@ -286,7 +289,7 @@ async def handle_start(message: Message, command: CommandObject):
     first_row = []
     if channel_url:
         first_row.append(InlineKeyboardButton(text="🚀 Перейти в канал", url=channel_url))
-    app_url = get_webapp_url()
+    app_url = get_webapp_url(user_id)
     if app_url:
         first_row.append(InlineKeyboardButton(text="📱 Открыть Приложение", web_app=WebAppInfo(url=app_url)))
     if first_row:
@@ -334,7 +337,7 @@ async def handle_check_subscription(call: CallbackQuery):
             "Переходи, выбирай нужную игру и жми «Получить скрипт»!</i>"
         )
         buttons = []
-        app_url = get_webapp_url()
+        app_url = get_webapp_url(user_id)
         row1 = [InlineKeyboardButton(text="🚀 Перейти в канал", url=channel_url)]
         if app_url:
             row1.append(InlineKeyboardButton(text="📱 Открыть Приложение", web_app=WebAppInfo(url=app_url)))

@@ -26,33 +26,36 @@
     "script_key": "s2",
     "slug": "stealanegg",
     "game_name": "Steal an Egg",
-    "features": "• Auto Steal by Rarity, Income & Weight (Кража редких яиц)\n• Steal Big Eggs mode (Кража огромных яиц по весу)\n• Anti Traps & Auto Escape Treadmill (Обход всех ловушек)\n• Hungry Monster Event Auto Farm (Авто-фарм ивента Монстра)\n• Auto Fuse & Auto Sell (Слияние и авто-продажа питомцев)\n• Full Egg ESP, Plot ESP & Player ESP (ВХ на яйца и базы)\n• Fly & Waypoint Teleport (Свободный полёт и телепорт)",
-    "script_code": "loadstring(game:HttpGet(\"https://raw.githubusercontent.com/PulseZax/Loader/refs/heads/main/.lua\"))()",
+    "features": "• Fly – Adjustable flight speed from 1–200.\n• Invincibility – Protects against kill parts, lava, and damage parts.\n• Float – Adjustable movement, ascend, and descend speeds.\n• Noclip – Walk through obstacles.\n• Invisible – Makes your character invisible.",
+    "script_code": "loadstring(game:HttpGet(\"https://rawscripts.net/raw/Steal-An-Egg-Snowy-Hub-Auto-Farm-Auto-Steal-Auto-Hatch-TP-More-223705\"))()",
     "executors": "ПК и Мобильные (Delta, Arceus X, Fluxus, Codex, Solara)",
-    "image_url": "https://pulsehub.gg/assets/art/steal-an-egg.webp",
-    "created_at": "2026-09-30 12:00:00"
+    "image_url": "https://tr.rbxcdn.com/180DAY-875b2a6dc156ce6dd64eb637e73238ce/480/270/Image/Png/noFilter",
+    "created_at": "2026-09-30 12:00:00",
+    "title": "Snowy Hub | Auto Farm, Auto Steal, Auto Hatch, TP & More"
   },
   "s3": {
     "id": 3,
     "script_key": "s3",
     "slug": "murdermystery2",
     "game_name": "Murder Mystery 2",
-    "features": "• Role ESP (ВХ на маньяка, шерифа, выпавший пистолет)\n• Silent Aim & Knife Throw Aimbot (Скрытый аимбот)\n• Kill Aura & Auto Shoot Murderer (Авто-убийство маньяка)\n• Auto Farm Coins (Молниеносный сбор монет с авто-уклонением)\n• Fly, Noclip, Infinite Jump & Desync (Свободный полёт)",
-    "script_code": "loadstring(game:HttpGet(\"https://raw.githubusercontent.com/PulseZax/Loader/refs/heads/main/.lua\"))()",
+    "features": "• Murder Mystery 2 ー #1 free GUI | Fully Auto Farm & More\n• Features:\n• Auto Farm [Murder/Sheriff/Hero/Innocent]\n• Auto Farm Coins\n• Reset When Bag Full",
+    "script_code": "loadstring(game:HttpGet(\"https://rawscripts.net/raw/Murder-Mystery-2-The-best-free-script-lots-of-features-202764\"))()",
     "executors": "ПК и Мобильные (Delta, Arceus X, Fluxus, Codex, Solara)",
-    "image_url": "https://pulsehub.gg/assets/art/mm2.webp",
-    "created_at": "2026-09-30 12:00:00"
+    "image_url": "https://tr.rbxcdn.com/180DAY-fe7335c3ad752e84323cd81ae38de69a/480/270/Image/Png/noFilter",
+    "created_at": "2026-09-30 12:00:00",
+    "title": "The best free script lots of features"
   },
   "s4": {
     "id": 4,
     "script_key": "s4",
     "slug": "rivals",
     "game_name": "Rivals",
-    "features": "• Silent Aim with FOV & Prediction (Скрытый аимбот в голову)\n• 2D Box & Skeleton ESP (ВХ сквозь любые стены с HP)\n• No Recoil, No Spread & Rapid Fire (Стрельба без отдачи)\n• Auto Shoot / TriggerBot (Авто-выстрел при наведении)\n• BunnyHop & Speed Boost (Распрыжка и скорость)",
-    "script_code": "loadstring(game:HttpGet(\"https://raw.githubusercontent.com/PulseZax/Loader/refs/heads/main/.lua\"))()",
+    "features": "• Trigger bot\n• Legit Aimbot\n• Hitbox",
+    "script_code": "loadstring(game:HttpGet(\"https://rawscripts.net/raw/RIVALS-Esp-Aimbot-Triggerbot-and-more-229209\"))()",
     "executors": "ПК и Мобильные (Delta, Arceus X, Fluxus, Codex, Solara)",
-    "image_url": "https://pulsehub.gg/assets/art/rivals.webp",
-    "created_at": "2026-09-30 12:00:00"
+    "image_url": "https://tr.rbxcdn.com/180DAY-3362a7d2bfc71def6178a16e2ca58420/480/270/Image/Png/noFilter",
+    "created_at": "2026-09-30 12:00:00",
+    "title": "Esp Aimbot Triggerbot and more"
   },
   "s5": {
     "id": 5,
@@ -125,21 +128,36 @@
     "script_key": "s11",
     "slug": "bloxstrike",
     "game_name": "BloxStrike",
-    "features": "• Legit & Silent Aim с профилями под каждое оружие\n• Skin Changer (Все скины на ножи, перчатки и оружие)\n• ESP Boxes, Chams & Skeleton (Полный ВХ)\n• Grenade Helper & Bomb Defuse Timer (Траектория гранат)\n• Auto Buy (Авто-закупка брони и оружия)",
-    "script_code": "loadstring(game:HttpGet(\"https://raw.githubusercontent.com/PulseZax/Loader/refs/heads/main/.lua\"))()",
+    "features": "• Skin Changer\n• Silent Aim\n• Wallbang Everyone\n• Gun modifications\n• Aimbot",
+    "script_code": "loadstring(game:HttpGet(\"https://rawscripts.net/raw/UPDATE!-BloxStrike-Silent-Aim-Skin-Changer-Wallbang-And-MORE-WORKING-229495\"))()",
     "executors": "ПК и Мобильные (Delta, Arceus X, Fluxus, Codex, Solara)",
-    "image_url": "https://pulsehub.gg/assets/icons/blox-strike.webp",
-    "created_at": "2026-09-30 12:00:00"
+    "image_url": "https://tr.rbxcdn.com/180DAY-5de034057184c82666b530ef54e2898e/480/270/Image/Png/noFilter",
+    "created_at": "2026-09-30 12:00:00",
+    "title": "Silent Aim Skin Changer Wallbang And MORE WORKING"
   },
   "s12": {
     "id": 12,
     "script_key": "s12",
     "slug": "sandiego",
     "game_name": "San Diego Border Roleplay",
-    "features": "• Auto Smuggle (Полный цикл авто-контрабанды с продажей)\n• Garage & Car Tuning (Тюнинг машин, скорость, полный привод)\n• Silent Aim & Wall Shot (Стрельба сквозь препятствия)\n• Vehicle & Player ESP (Подсветка машин и игроков)",
-    "script_code": "loadstring(game:HttpGet(\"https://raw.githubusercontent.com/PulseZax/Loader/refs/heads/main/.lua\"))()",
+    "features": "• Features:\n• Smuggle Autofarm;\n• Truck Autofarm;\n• Boat Autofarm;\n• And way more!",
+    "script_code": "loadstring(game:HttpGet(\"https://rawscripts.net/raw/BIKES-San-Diego-Border-Roleplay-Autofarm-Police-AutoDetect-Esp-226987\"))()",
     "executors": "ПК и Мобильные (Delta, Arceus X, Fluxus, Codex, Solara)",
-    "image_url": "https://pulsehub.gg/assets/art/san-diego.webp",
-    "created_at": "2026-09-30 12:00:00"
+    "image_url": "https://scriptblox.com/images/script/136020512003847-1785921902099.png",
+    "created_at": "2026-09-30 12:00:00",
+    "title": "BoatAutofarm TruckAutofarm SmuggleAutofarm and more"
+  },
+  "s13": {
+    "id": 13,
+    "script_key": "s13",
+    "slug": "99nightsintheforest",
+    "game_name": "99 Nights In The Forest",
+    "title": "Neox Hub | Unlimited Health, Infinite Saplings, Godmode & ESP",
+    "features": "• ESP (ВХ на монстров, выживших, лагерь и лут)\n• Unlimited Health / Godmode (Бессмертие и защита от любого урона)\n• Infinite Saplings & Auto Farm (Бесконечные саженцы и авто-фарм)\n• Auto Eat & Food Selection (Авто-еда и выбор припасов)\n• Fly, Noclip, Speed & Teleport (Полёт сквозь стены и быстрый ТП)",
+    "script_code": "loadstring(game:HttpGet(\"https://raw.githubusercontent.com/hassanxzayn-lua/NEOXHUBMAIN/refs/heads/main/loader\", true))()",
+    "executors": "ПК и Мобильные (Delta, Arceus X, Fluxus, Codex, Solara)",
+    "image_url": "https://scriptblox.com/images/script/79546208627805-1763281690049.png",
+    "channel_message_id": 25,
+    "created_at": "2026-09-30 23:00:00"
   }
 }
