@@ -30,6 +30,7 @@ from aiohttp import web
 import config
 import database
 import post_builder
+import script_finder
 
 # Timezone GMT+5
 TZ_GMT5 = timezone(timedelta(hours=5))
@@ -54,6 +55,9 @@ class ChannelSetup(StatesGroup):
 
 class DeltaUpload(StatesGroup):
     waiting_for_apk = State()
+
+class AdminScriptSearch(StatesGroup):
+    waiting_for_game_query = State()
 
 # Initialize Bot and Dispatcher
 bot = Bot(
@@ -110,9 +114,11 @@ def get_webapp_url() -> str:
 def get_admin_menu_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
+            [InlineKeyboardButton(text="🔍 Поиск скриптов по базам (PulseHub / Blox)", callback_data="admin_search_scripts")],
             [InlineKeyboardButton(text="➕ Создать пост со скриптом", callback_data="admin_create_post")],
             [InlineKeyboardButton(text="📱 Обновить Delta APK (Автодельта)", callback_data="admin_upload_delta")],
-            [InlineKeyboardButton(text="⏰ Автопост 12:00 GMT+5", callback_data="admin_autopost_menu")],
+            [InlineKeyboardButton(text="📊 Ежедневный опрос в канал (12:00)", callback_data="admin_autopost_menu")],
+            [InlineKeyboardButton(text="📢 Опубликовать Changelog в канал", callback_data="admin_post_changelog")],
             [InlineKeyboardButton(text="📌 Опубликовать шапку канала", callback_data="admin_post_header")],
             [InlineKeyboardButton(text="📢 Привязать Telegram-канал", callback_data="admin_set_channel")],
             [InlineKeyboardButton(text="📋 Список скриптов", callback_data="admin_list_scripts")],
@@ -133,8 +139,11 @@ async def deliver_script_to_user(chat_id: int, script: dict, channel_url: str):
     )
     delivery_kb = build_script_delivery_keyboard(channel_url)
     
-    if config.BANNER_PATH.exists():
-        photo = FSInputFile(config.BANNER_PATH)
+    delivery_banner = getattr(config, "BANNER_DELIVERY", None)
+    banner_to_use = delivery_banner if (delivery_banner and delivery_banner.exists()) else config.BANNER_PATH
+    
+    if banner_to_use.exists():
+        photo = FSInputFile(banner_to_use)
         await bot.send_photo(
             chat_id=chat_id,
             photo=photo,
@@ -147,6 +156,7 @@ async def deliver_script_to_user(chat_id: int, script: dict, channel_url: str):
             text=delivery_text,
             reply_markup=delivery_kb,
         )
+
 
 
 # --- USER HANDLERS ---
@@ -234,8 +244,11 @@ async def handle_start(message: Message, command: CommandObject):
         
     reply_markup = InlineKeyboardMarkup(inline_keyboard=keyboard_buttons) if keyboard_buttons else None
 
-    if config.BANNER_PATH.exists():
-        photo = FSInputFile(config.BANNER_PATH)
+    welcome_banner = getattr(config, "BANNER_WELCOME", None)
+    banner_file = welcome_banner if (welcome_banner and welcome_banner.exists()) else config.BANNER_PATH
+
+    if banner_file.exists():
+        photo = FSInputFile(banner_file)
         await message.answer_photo(photo=photo, caption=welcome_text, reply_markup=reply_markup)
     else:
         await message.answer(welcome_text, reply_markup=reply_markup)
@@ -277,8 +290,10 @@ async def handle_check_subscription(call: CallbackQuery):
             buttons.append([InlineKeyboardButton(text="⚙️ Панель управления", callback_data="open_admin_panel")])
         reply_markup = InlineKeyboardMarkup(inline_keyboard=buttons)
         
-        if config.BANNER_PATH.exists():
-            photo = FSInputFile(config.BANNER_PATH)
+        welcome_banner = getattr(config, "BANNER_WELCOME", None)
+        banner_file = welcome_banner if (welcome_banner and welcome_banner.exists()) else config.BANNER_PATH
+        if banner_file.exists():
+            photo = FSInputFile(banner_file)
             await call.message.answer_photo(photo=photo, caption=welcome_text, reply_markup=reply_markup)
         else:
             await call.message.answer(welcome_text, reply_markup=reply_markup)
@@ -359,6 +374,7 @@ async def process_game_name(message: Message, state: FSMContext):
 
     kb = InlineKeyboardMarkup(
         inline_keyboard=[
+            [InlineKeyboardButton(text="🤖 Сгенерировать функционал (ИИ)", callback_data="use_ai_features")],
             [InlineKeyboardButton(text="⚡ По умолчанию (ESP, AutoFarm, Speed, TP)", callback_data="use_default_features")],
             [InlineKeyboardButton(text="❌ Отмена", callback_data="cancel_fsm")],
         ]
@@ -367,15 +383,25 @@ async def process_game_name(message: Message, state: FSMContext):
     await message.answer(
         f"✅ Игра определена: <b>{formatted_name}</b>\n\n"
         "🛠 <b>Шаг 2 из 4: Функционал скрипта</b>\n\n"
-        "Напишите функции через запятую или нажмите кнопку ниже:",
+        "Напишите функции через запятую или нажмите кнопку ниже (ИИ подберёт лучший функционал):",
         reply_markup=kb,
     )
+
+@dp.callback_query(PostCreation.waiting_for_features, F.data == "use_ai_features")
+async def process_ai_features(call: CallbackQuery, state: FSMContext):
+    data = await state.get_data()
+    game_name = data.get("game_name", "Roblox")
+    ai_features = post_builder.generate_ai_features(game_name)
+    await state.update_data(features=ai_features)
+    await prompt_for_executors(call.message, state)
+    await call.answer("🤖 Функционал сгенерирован ИИ!")
 
 @dp.callback_query(PostCreation.waiting_for_features, F.data == "use_default_features")
 async def process_default_features(call: CallbackQuery, state: FSMContext):
     await state.update_data(features=post_builder.DEFAULT_FEATURES)
     await prompt_for_executors(call.message, state)
     await call.answer()
+
 
 @dp.message(PostCreation.waiting_for_features)
 async def process_custom_features(message: Message, state: FSMContext):
@@ -811,7 +837,285 @@ async def execute_post_header(call: CallbackQuery):
         await call.answer("Ошибка")
 
 
+
+# --- ADMIN SCRIPT SEARCH (PULSEHUB & SCRIPTBLOX SAFE FINDER) ---
+
+_SEARCH_CACHE = {}
+
+@dp.callback_query(F.data == "admin_search_scripts")
+async def start_admin_search_scripts(call: CallbackQuery, state: FSMContext):
+    if not await is_admin(call.from_user.id):
+        await call.answer("⛔ Нет доступа", show_alert=True)
+        return
+
+    await state.set_state(AdminScriptSearch.waiting_for_game_query)
+    cancel_kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="❌ Отмена", callback_data="cancel_fsm")]])
+
+    await call.message.answer(
+        "🔍 <b>Поиск скриптов по открытым базам (PulseHub & ScriptBlox)</b>\n\n"
+        "Напишите название игры на английском или русском (например: <code>mm2</code>, <code>steal an egg</code>, <code>rivals</code>, <code>blade ball</code>, <code>blox fruits</code>):\n\n"
+        "🛡 <i>Все найденные скрипты автоматически проверяются на безопасность (блокируются вебхуки, стилеры и RAT).</i>",
+        reply_markup=cancel_kb,
+    )
+    await call.answer()
+
+@dp.message(AdminScriptSearch.waiting_for_game_query)
+async def process_admin_search_query(message: Message, state: FSMContext):
+    query = message.text.strip()
+    if not query:
+        await message.answer("⚠️ Пожалуйста, введите название текстом.")
+        return
+
+    status_msg = await message.answer(f"⏳ <b>Ищу проверенные скрипты для «{query}» в PulseHub и ScriptBlox...</b>")
+    
+    results = await script_finder.search_scripts_online(query)
+    try:
+        await status_msg.delete()
+    except Exception:
+        pass
+
+    if not results:
+        cancel_kb = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="🔍 Попробовать другой запрос", callback_data="admin_search_scripts")],
+            [InlineKeyboardButton(text="👑 В меню админа", callback_data="open_admin_panel")],
+        ])
+        await message.answer(
+            f"❌ <b>По запросу «{query}» безопасных скриптов не найдено.</b>\n\n"
+            "Попробуйте написать другое название или добавьте скрипт вручную через «➕ Создать пост со скриптом».",
+            reply_markup=cancel_kb,
+        )
+        await state.clear()
+        return
+
+    user_id = message.from_user.id
+    _SEARCH_CACHE[user_id] = results
+    await state.clear()
+
+    await message.answer(f"🎉 <b>Найдено рабочих скриптов: {len(results)}</b>\nВыберите действие под любым из них:")
+
+    import html as html_lib
+    for idx, item in enumerate(results[:4]):
+        preview_code = item['script_code']
+        if len(preview_code) > 120:
+            preview_display = preview_code[:115] + "..."
+        else:
+            preview_display = preview_code
+
+        card_text = (
+            f"🎮 <b>Игра:</b> {item['game_name']}\n"
+            f"📝 <b>Скрипт:</b> {item['title']}\n"
+            f"🌐 <b>Источник:</b> {item['source']}\n"
+            f"🛡 <b>Безопасность:</b> 🟢 <i>{item['safety_note']}</i>\n\n"
+            f"🛠 <b>Функционал (ИИ анализ):</b>\n"
+            f"{item['features']}\n\n"
+            f"📜 <b>Код:</b>\n<code>{html_lib.escape(preview_display)}</code>"
+        )
+
+        card_kb = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [InlineKeyboardButton(text="📢 Опубликовать в канал в 1 клик", callback_data=f"pub_found:{idx}")],
+                [InlineKeyboardButton(text="💾 Только сохранить в базу", callback_data=f"save_found:{idx}")],
+            ]
+        )
+        await message.answer(card_text, reply_markup=card_kb)
+
+
+@dp.callback_query(F.data.startswith("pub_found:"))
+async def callback_publish_found(call: CallbackQuery):
+    if not await is_admin(call.from_user.id):
+        await call.answer("⛔ Нет доступа", show_alert=True)
+        return
+
+    idx = int(call.data.split(":")[1])
+    user_id = call.from_user.id
+    cached_list = _SEARCH_CACHE.get(user_id, [])
+
+    if idx >= len(cached_list):
+        await call.answer("⚠️ Срок действия поиска истёк. Повторите поиск.", show_alert=True)
+        return
+
+    item = cached_list[idx]
+    channel = await database.get_setting("channel_id", config.CHANNEL_ID)
+    if not channel:
+        await call.answer("⚠️ Канал ещё не привязан!", show_alert=True)
+        return
+
+    # 1. Save to database
+    script_key = await database.add_script(
+        game_name=item["game_name"],
+        features=item["features"],
+        script_code=item["script_code"],
+        executors=post_builder.DEFAULT_EXECUTORS,
+    )
+
+    # 2. Build channel post
+    post_text = post_builder.build_channel_post(
+        game_name=item["game_name"],
+        features=item["features"],
+        executors=post_builder.DEFAULT_EXECUTORS,
+    )
+    bot_info = await bot.get_me()
+    bot_user = bot_info.username or config.BOT_USERNAME
+    deep_link = f"https://t.me/{bot_user}?start={script_key}"
+
+    post_kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="🚀 Получить скрипт", url=deep_link)]
+        ]
+    )
+
+    # 3. Publish to channel
+    try:
+        if config.BANNER_PATH.exists():
+            photo = FSInputFile(config.BANNER_PATH)
+            sent = await bot.send_photo(chat_id=channel, photo=photo, caption=post_text, reply_markup=post_kb)
+        else:
+            sent = await bot.send_message(chat_id=channel, text=post_text, reply_markup=post_kb)
+
+        await database.update_script_channel_post(script_key, sent.message_id)
+        channel_clean = channel.replace("@", "")
+        post_url = f"https://t.me/{channel_clean}/{sent.message_id}"
+
+        confirm_kb = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [InlineKeyboardButton(text="🚀 Посмотреть пост в канале", url=post_url)],
+                [InlineKeyboardButton(text="👑 В меню админа", callback_data="open_admin_panel")],
+            ]
+        )
+        await call.message.answer(
+            f"🎉 <b>Скрипт «{item['game_name']}» успешно опубликован в @{channel_clean}!</b>\n\n"
+            f"Ключ: <code>{script_key}</code>\n"
+            f"Ссылка на пост: <a href=\"{post_url}\">{post_url}</a>",
+            reply_markup=confirm_kb,
+            disable_web_page_preview=True,
+        )
+        await call.answer("✅ Опубликовано!")
+    except Exception as e:
+        logger.error(f"Error publishing found script: {e}")
+        await call.message.answer(f"❌ Ошибка публикации: {e}")
+        await call.answer("Ошибка")
+
+
+@dp.callback_query(F.data.startswith("save_found:"))
+async def callback_save_found(call: CallbackQuery):
+    if not await is_admin(call.from_user.id):
+        await call.answer("⛔ Нет доступа", show_alert=True)
+        return
+
+    idx = int(call.data.split(":")[1])
+    user_id = call.from_user.id
+    cached_list = _SEARCH_CACHE.get(user_id, [])
+
+    if idx >= len(cached_list):
+        await call.answer("⚠️ Срок действия поиска истёк. Повторите поиск.", show_alert=True)
+        return
+
+    item = cached_list[idx]
+    script_key = await database.add_script(
+        game_name=item["game_name"],
+        features=item["features"],
+        script_code=item["script_code"],
+        executors=post_builder.DEFAULT_EXECUTORS,
+    )
+
+    bot_info = await bot.get_me()
+    bot_user = bot_info.username or config.BOT_USERNAME
+    deep_link = f"https://t.me/{bot_user}?start={script_key}"
+
+    await call.message.answer(
+        f"✅ <b>Скрипт «{item['game_name']}» сохранён в базе!</b>\n\n"
+        f"Ключ: <code>{script_key}</code>\n"
+        f"Ссылка для выдачи: {deep_link}"
+    )
+    await call.answer("Сохранено!")
+
+
+# --- CHANGELOG PUBLISHER ---
+
+@dp.callback_query(F.data == "admin_post_changelog")
+async def prompt_post_changelog(call: CallbackQuery):
+    if not await is_admin(call.from_user.id):
+        await call.answer("⛔ Нет доступа", show_alert=True)
+        return
+
+    bot_info = await bot.get_me()
+    bot_user = bot_info.username or config.BOT_USERNAME
+    changelog_text = post_builder.build_changelog_post_text(bot_user)
+
+    kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="🚀 Опубликовать и закрепить в канале", callback_data="do_post_changelog")],
+            [InlineKeyboardButton(text="◀️ Назад в меню", callback_data="open_admin_panel")],
+        ]
+    )
+
+    preview_banner = getattr(config, "BANNER_UPDATE", None)
+    banner_to_use = preview_banner if (preview_banner and preview_banner.exists()) else config.BANNER_PATH
+
+    if banner_to_use.exists():
+        photo = FSInputFile(banner_to_use)
+        await call.message.answer_photo(
+            photo=photo,
+            caption=f"📢 <b>Предпросмотр поста с обновлением:</b>\n\n{changelog_text}",
+            reply_markup=kb,
+        )
+    else:
+        await call.message.answer(
+            f"📢 <b>Предпросмотр поста с обновлением:</b>\n\n{changelog_text}",
+            reply_markup=kb,
+        )
+    await call.answer()
+
+
+@dp.callback_query(F.data == "do_post_changelog")
+async def execute_post_changelog(call: CallbackQuery):
+    if not await is_admin(call.from_user.id):
+        await call.answer("⛔ Нет доступа", show_alert=True)
+        return
+
+    channel = await database.get_setting("channel_id", config.CHANNEL_ID)
+    if not channel:
+        await call.answer("⚠️ Канал ещё не привязан!", show_alert=True)
+        return
+
+    bot_info = await bot.get_me()
+    bot_user = bot_info.username or config.BOT_USERNAME
+    channel_clean = channel.replace("@", "")
+    changelog_text = post_builder.build_changelog_post_text(bot_user)
+
+    changelog_kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="🤖 Открыть бота со скриптами ↗", url=f"https://t.me/{bot_user}")],
+            [InlineKeyboardButton(text="📱 Открыть Mini App каталог ↗", url=f"https://t.me/{bot_user}")],
+        ]
+    )
+
+    update_banner = getattr(config, "BANNER_UPDATE", None)
+    banner_to_use = update_banner if (update_banner and update_banner.exists()) else config.BANNER_PATH
+
+    try:
+        if banner_to_use.exists():
+            photo = FSInputFile(banner_to_use)
+            sent = await bot.send_photo(chat_id=channel, photo=photo, caption=changelog_text, reply_markup=changelog_kb)
+        else:
+            sent = await bot.send_message(chat_id=channel, text=changelog_text, reply_markup=changelog_kb)
+
+        try:
+            await bot.pin_chat_message(chat_id=channel, message_id=sent.message_id, disable_notification=False)
+        except Exception as e:
+            logger.warning(f"Could not pin changelog: {e}")
+
+        await database.set_setting("last_changelog_message_id", str(sent.message_id))
+        await call.message.answer(f"🎉 <b>Changelog 2.0 успешно опубликован и закреплен в @{channel_clean}!</b>")
+        await call.answer("✅ Готово!")
+    except Exception as e:
+        logger.error(f"Error posting changelog: {e}")
+        await call.message.answer(f"❌ <b>Ошибка при публикации Changelog:</b>\n<code>{e}</code>")
+        await call.answer("Ошибка")
+
+
 # --- USER SEARCH HANDLER ---
+
 
 @dp.message(F.text)
 async def handle_user_search(message: Message, state: FSMContext):
@@ -872,63 +1176,41 @@ async def handle_user_search(message: Message, state: FSMContext):
 
     await message.answer(msg_text, reply_markup=InlineKeyboardMarkup(inline_keyboard=kb_buttons))
 
-# --- DAILY INTERACTIVE AUTOPOST (12:00 GMT+5) ---
+# --- DAILY INTERACTIVE POLL (12:00 GMT+5) ---
 
-def build_daily_interactive_post_text(bot_username: str) -> str:
-    return (
-        "🔥 <b>НА КАКУЮ ИГРУ СКИНУТЬ СКРИПТ?</b> 🔥\n"
-        "━━━━━━━━━━━━━━━━━━━━━\n"
-        "👋 Привет, подписчики! Администрация канала готовит новую пачку топовых скриптов и читов.\n\n"
-        "👇 <b>Напишите в комментариях под этим постом:</b>\n"
-        "1️⃣ Название вашей любимой игры в Roblox\n"
-        "2️⃣ Какой функционал вам нужен (Auto Farm, ESP, Aimbot, Auto Parry, Teleport, Fly)\n\n"
-        "⚡ <i>Скрипты на игры с наибольшим количеством голосов и комментариев мы выложим в первую очередь уже сегодня!</i>\n"
-        "━━━━━━━━━━━━━━━━━━━━━\n"
-        f"🤖 <b>Наш бот со скриптами:</b> @{bot_username}\n"
-        "📱 <b>Инжектор Delta для телефона:</b> закреплён в канале"
-    )
-
-async def publish_daily_interactive_post(force: bool = False) -> bool:
-    """Publishes the daily interactive game request post to the channel."""
+async def publish_daily_poll(force: bool = False) -> bool:
+    """Publishes the daily interactive poll to the channel so subscribers can vote without comments."""
     channel = await database.get_setting("channel_id", config.CHANNEL_ID)
     if not channel:
-        logger.warning("Daily autopost skipped: channel is not set.")
+        logger.warning("Daily poll skipped: channel is not set.")
         return False
 
     today_str = datetime.now(TZ_GMT5).strftime("%Y-%m-%d")
-    last_post_date = await database.get_setting("last_daily_autopost_date")
-    if not force and last_post_date == today_str:
-        logger.info("Daily interactive post already published today.")
+    last_poll_date = await database.get_setting("last_daily_poll_date")
+    if not force and last_poll_date == today_str:
+        logger.info("Daily poll already published today.")
         return False
 
-    bot_info = await bot.get_me()
-    bot_user = bot_info.username or config.BOT_USERNAME
-    post_text = build_daily_interactive_post_text(bot_user)
-
-    markup = InlineKeyboardMarkup(
-        inline_keyboard=[
-            [InlineKeyboardButton(text="🤖 Открыть бота со скриптами ↗", url=f"https://t.me/{bot_user}")],
-            [InlineKeyboardButton(text="📱 Каталог скриптов в боте ↗", url=f"https://t.me/{bot_user}")],
-        ]
-    )
+    question, options = post_builder.get_daily_poll_data()
 
     try:
-        if config.BANNER_PATH.exists():
-            photo = FSInputFile(config.BANNER_PATH)
-            await bot.send_photo(chat_id=channel, photo=photo, caption=post_text, reply_markup=markup)
-        else:
-            await bot.send_message(chat_id=channel, text=post_text, reply_markup=markup)
-
-        await database.set_setting("last_daily_autopost_date", today_str)
-        logger.info(f"Daily interactive post published to {channel} for {today_str}.")
+        sent_poll = await bot.send_poll(
+            chat_id=channel,
+            question=question,
+            options=options,
+            is_anonymous=True,
+            allows_multiple_answers=False,
+        )
+        await database.set_setting("last_daily_poll_date", today_str)
+        logger.info(f"Daily poll published to {channel} for {today_str} (msg_id={sent_poll.message_id}).")
         return True
     except Exception as e:
-        logger.error(f"Failed to publish daily interactive post: {e}")
+        logger.error(f"Failed to publish daily poll: {e}")
         return False
 
 async def daily_autopost_scheduler():
-    """Background loop that publishes daily interactive post at 12:00 GMT+5."""
-    logger.info("Daily autopost scheduler (12:00 GMT+5) started.")
+    """Background loop that publishes daily interactive poll at 12:00 GMT+5."""
+    logger.info("Daily autopost poll scheduler (12:00 GMT+5) started.")
     while True:
         try:
             now_gmt5 = datetime.now(TZ_GMT5)
@@ -937,13 +1219,13 @@ async def daily_autopost_scheduler():
                 target += timedelta(days=1)
                 
             wait_seconds = (target - now_gmt5).total_seconds()
-            logger.info(f"Next daily interactive post scheduled for {target.strftime('%Y-%m-%d %H:%M:%S')} GMT+5 (in {int(wait_seconds)}s)")
+            logger.info(f"Next daily poll scheduled for {target.strftime('%Y-%m-%d %H:%M:%S')} GMT+5 (in {int(wait_seconds)}s)")
             
             await asyncio.sleep(wait_seconds)
 
             enabled = await database.get_setting("daily_autopost_enabled", "true")
             if enabled.lower() == "true":
-                await publish_daily_interactive_post(force=False)
+                await publish_daily_poll(force=False)
                 
             await asyncio.sleep(60)
         except asyncio.CancelledError:
@@ -962,23 +1244,23 @@ async def callback_admin_autopost(call: CallbackQuery):
     enabled = await database.get_setting("daily_autopost_enabled", "true")
     is_on = enabled.lower() == "true"
     status_emoji = "🟢 Включен" if is_on else "🔴 Выключен"
-    toggle_text = "🔴 Выключить автопост" if is_on else "🟢 Включить автопост"
+    toggle_text = "🔴 Выключить авто-опрос" if is_on else "🟢 Включить авто-опрос"
 
-    last_date = await database.get_setting("last_daily_autopost_date", "Ещё не было")
+    last_date = await database.get_setting("last_daily_poll_date", "Ещё не было")
     now_str = datetime.now(TZ_GMT5).strftime("%H:%M:%S")
 
     text = (
-        "⏰ <b>Ежедневный автопост «На какую игру скинуть скрипт?»</b>\n\n"
+        "📊 <b>Ежедневный опрос «На какую игру выложить следующий скрипт?»</b>\n\n"
         f"📌 Статус: <b>{status_emoji}</b>\n"
         f"🕒 Время отправки: <b>каждый день в 12:00 (GMT+5)</b>\n"
         f"📅 Текущее время на сервере: <b>{now_str} (GMT+5)</b>\n"
         f"📝 Последняя отправка: <code>{last_date}</code>\n\n"
-        "Бот ежедневно публикует интерактивный пост с призывом к подписчикам писать желаемые игры в комментариях."
+        "Бот ежедневно публикует официальный Telegram-опрос прямо в канал, где подписчики могут в один клик проголосовать за любимую игру (комментарии не требуются)!"
     )
 
     kb = InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="🚀 Опубликовать тест прямо сейчас", callback_data="autopost_test_now")],
+            [InlineKeyboardButton(text="🚀 Опубликовать опрос в канал сейчас", callback_data="autopost_test_now")],
             [InlineKeyboardButton(text=toggle_text, callback_data="autopost_toggle")],
             [InlineKeyboardButton(text="◀️ Назад в меню", callback_data="open_admin_panel")],
         ]
@@ -1006,14 +1288,15 @@ async def callback_autopost_test_now(call: CallbackQuery):
         await call.answer("⛔ Нет доступа", show_alert=True)
         return
 
-    success = await publish_daily_interactive_post(force=True)
+    success = await publish_daily_poll(force=True)
     if success:
         channel = await database.get_setting("channel_id", config.CHANNEL_ID)
-        await call.message.answer(f"🎉 <b>Интерактивный пост успешно опубликован в {channel}!</b>")
-        await call.answer("✅ Успешно!")
+        await call.message.answer(f"🎉 <b>Официальный опрос успешно опубликован в канале {channel}!</b>")
+        await call.answer("✅ Опрос опубликован!")
     else:
-        await call.message.answer("❌ <b>Не удалось отправить пост.</b> Проверьте, привязан ли канал и есть ли у бота права админа.")
+        await call.message.answer("❌ <b>Не удалось отправить опрос.</b> Проверьте, привязан ли канал и есть ли у бота права на публикацию.")
         await call.answer("Ошибка")
+
 
 # --- WEB SERVER FOR MINI APP API ---
 
