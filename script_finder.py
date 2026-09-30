@@ -9,39 +9,134 @@ import post_builder
 
 logger = logging.getLogger(__name__)
 
-# Known verified Fast PulseHub scripts
+# Official Authentic PulseHub Universal Loader from pulsehub.gg
+PULSEHUB_LOADER_CODE = 'loadstring(game:HttpGet("https://raw.githubusercontent.com/PulseZax/Loader/refs/heads/main/.lua"))()'
+
 PULSEHUB_GAMES = {
-    "mm2": {
-        "title": "Pulse Hub | Murder Mystery 2 (Keyless & Safe)",
-        "game_name": "Murder Mystery 2",
-        "script_code": "loadstring(game:HttpGet('https://raw.githubusercontent.com/JustParadozCode/LinkHive---Scripts/refs/heads/main/script.lua'))()",
-        "source": "PulseHub.gg",
-        "image_url": "https://api.pulsehub.gg/assets/mm2.png",
+    "pulsehub": {
+        "title": "⚡ Pulse Hub | Официальный Универсальный Лоадер (Все игры в одном)",
+        "game_name": "Pulse Hub Universal",
+        "script_code": PULSEHUB_LOADER_CODE,
+        "source": "PulseHub.gg (Официальный)",
+        "features": (
+            "• Авто-определение игры при запуске в Roblox\n"
+            "• Без ключа (Keyless) и без регистрации\n"
+            "• Поддержка: MM2, Steal an Egg, Rivals, BloxStrike, San Diego\n"
+            "• Молниеносная загрузка без зависаний\n"
+            "• Работает на Delta, Solara, Wave, Codex, Arceus X"
+        ),
+        "image_url": "https://pulsehub.gg/og.png",
     },
     "steal an egg": {
-        "title": "Pulse Hub | Steal an Egg (Auto Steal & Fly)",
+        "title": "Pulse Hub | Steal an Egg (Auto Steal, Auto Fuse & ESP)",
         "game_name": "Steal an Egg",
-        "script_code": "loadstring(game:HttpGet('https://raw.githubusercontent.com/JustParadozCode/LinkHive---Scripts/refs/heads/main/script.lua'))()",
-        "source": "PulseHub.gg",
-        "image_url": "https://tr.rbxcdn.com/180DAY-875b2a6dc156ce6dd64eb637e73238ce/480/270/Image/Png/noFilter",
+        "script_code": PULSEHUB_LOADER_CODE,
+        "source": "PulseHub.gg (Официальный)",
+        "features": (
+            "• Auto Steal by Rarity, Income & Weight (Кража редких яиц)\n"
+            "• Steal Big Eggs mode (Кража огромных яиц по весу)\n"
+            "• Anti Traps & Auto Escape Treadmill (Обход всех ловушек)\n"
+            "• Hungry Monster Event Auto Farm (Авто-фарм ивента Монстра)\n"
+            "• Auto Fuse & Auto Sell (Слияние и авто-продажа питомцев)\n"
+            "• Full Egg ESP, Plot ESP & Player ESP (ВХ на яйца и базы)\n"
+            "• Fly & Waypoint Teleport (Свободный полёт и телепорт)"
+        ),
+        "image_url": "https://pulsehub.gg/assets/art/steal-an-egg.webp",
+    },
+    "mm2": {
+        "title": "Pulse Hub | Murder Mystery 2 (Silent Aim, Coin Farm & ESP)",
+        "game_name": "Murder Mystery 2",
+        "script_code": PULSEHUB_LOADER_CODE,
+        "source": "PulseHub.gg (Официальный)",
+        "features": (
+            "• Role ESP (ВХ на маньяка, шерифа, выпавший пистолет)\n"
+            "• Silent Aim & Knife Throw Aimbot (Скрытый аимбот)\n"
+            "• Kill Aura & Auto Shoot Murderer (Авто-убийство маньяка)\n"
+            "• Auto Farm Coins (Молниеносный сбор монет с авто-уклонением)\n"
+            "• Fly, Noclip, Infinite Jump & Desync (Свободный полёт)"
+        ),
+        "image_url": "https://pulsehub.gg/assets/art/mm2.webp",
     },
     "rivals": {
-        "title": "Pulse Hub | Rivals (Silent Aim & ESP)",
+        "title": "Pulse Hub | RIVALS (Silent Aim, Skeleton ESP, No Recoil)",
         "game_name": "Rivals",
-        "script_code": "loadstring(game:HttpGet('https://raw.githubusercontent.com/JustParadozCode/LinkHive---Scripts/refs/heads/main/script.lua'))()",
-        "source": "PulseHub.gg",
-        "image_url": "https://scriptblox.com/images/script/-1-1790637613109.jpg",
+        "script_code": PULSEHUB_LOADER_CODE,
+        "source": "PulseHub.gg (Официальный)",
+        "features": (
+            "• Silent Aim with FOV & Prediction (Скрытый аимбот в голову)\n"
+            "• 2D Box & Skeleton ESP (ВХ сквозь любые стены с HP)\n"
+            "• No Recoil, No Spread & Rapid Fire (Стрельба без отдачи)\n"
+            "• Auto Shoot / TriggerBot (Авто-выстрел при наведении)\n"
+            "• BunnyHop & Speed Boost (Распрыжка и скорость)"
+        ),
+        "image_url": "https://pulsehub.gg/assets/art/rivals.webp",
     },
     "bloxstrike": {
-        "title": "Pulse Hub | BloxStrike (Aimbot & ESP)",
+        "title": "Pulse Hub | BloxStrike (Legit/Silent Aim, Skin Changer, ESP)",
         "game_name": "BloxStrike",
-        "script_code": "loadstring(game:HttpGet('https://raw.githubusercontent.com/JustParadozCode/LinkHive---Scripts/refs/heads/main/script.lua'))()",
-        "source": "PulseHub.gg",
-        "image_url": None,
+        "script_code": PULSEHUB_LOADER_CODE,
+        "source": "PulseHub.gg (Официальный)",
+        "features": (
+            "• Legit & Silent Aim с профилями под каждое оружие\n"
+            "• Skin Changer (Все скины на ножи, перчатки и оружие)\n"
+            "• ESP Boxes, Chams & Skeleton (Полный ВХ)\n"
+            "• Grenade Helper & Bomb Defuse Timer (Траектория гранат)\n"
+            "• Auto Buy (Авто-закупка брони и оружия)"
+        ),
+        "image_url": "https://pulsehub.gg/assets/icons/blox-strike.webp",
+    },
+    "san diego": {
+        "title": "Pulse Hub | San Diego Border RP (Auto Smuggle & Tuning)",
+        "game_name": "San Diego Border Roleplay",
+        "script_code": PULSEHUB_LOADER_CODE,
+        "source": "PulseHub.gg (Официальный)",
+        "features": (
+            "• Auto Smuggle (Полный цикл авто-контрабанды с продажей)\n"
+            "• Garage & Car Tuning (Тюнинг машин, скорость, полный привод)\n"
+            "• Silent Aim & Wall Shot (Стрельба сквозь препятствия)\n"
+            "• Vehicle & Player ESP (Подсветка машин и игроков)"
+        ),
+        "image_url": "https://pulsehub.gg/assets/art/san-diego.webp",
+    },
+    "grow a garden": {
+        "title": "Pulse Hub | Grow A Garden 2 (Auto Farm, Auto Sell, ESP)",
+        "game_name": "Grow A Garden 2",
+        "script_code": PULSEHUB_LOADER_CODE,
+        "source": "PulseHub.gg (Официальный)",
+        "features": (
+            "• Auto Harvest & Plant (Авто-сбор урожая и посадка растений)\n"
+            "• Auto Sell & Max Profit (Авто-продажа по максимальной цене)\n"
+            "• Plot & Rare Seeds ESP (ВХ на редкие семена и участки)\n"
+            "• Speed Boost & Teleport (Увеличенная скорость и телепорт)"
+        ),
+        "image_url": "https://pulsehub.gg/og.png",
+    },
+    "+1 speed": {
+        "title": "Pulse Hub | +1 Speed Keyboard Escape (Auto Win, Speed)",
+        "game_name": "+1 Speed Keyboard Escape",
+        "script_code": PULSEHUB_LOADER_CODE,
+        "source": "PulseHub.gg (Официальный)",
+        "features": (
+            "• Auto Farm Wins (Автоматический фарм побед)\n"
+            "• Infinite Speed Multiplier (Бесконечный множитель скорости)\n"
+            "• Skip Obstacles & Noclip (Прохождение любых препятствий)\n"
+            "• Godmode (Защита от падений и лавы)"
+        ),
+        "image_url": "https://pulsehub.gg/og.png",
     },
 }
 
 SYNONYMS = {
+    "пульс": "pulsehub",
+    "пульсехаб": "pulsehub",
+    "пульсхаб": "pulsehub",
+    "pulse": "pulsehub",
+    "loader": "pulsehub",
+    "лоадер": "pulsehub",
+    "все в одном": "pulsehub",
+    "всев одном": "pulsehub",
+    "универсальный": "pulsehub",
+    "универсал": "pulsehub",
     "мм2": "murder mystery 2",
     "мардер": "murder mystery 2",
     "бф": "blox fruits",
@@ -53,8 +148,18 @@ SYNONYMS = {
     "стил ан эгг": "steal an egg",
     "стил эгг": "steal an egg",
     "яйца": "steal an egg",
+    "яйцо": "steal an egg",
     "ривалс": "rivals",
     "райвалс": "rivals",
+    "блокстрайк": "bloxstrike",
+    "страйк": "bloxstrike",
+    "blox strike": "bloxstrike",
+    "сад": "grow a garden",
+    "гарден": "grow a garden",
+    "grow a garden": "grow a garden",
+    "спид": "+1 speed",
+    "скорость": "+1 speed",
+    "побег клавиатура": "+1 speed",
     "фиш": "fisch",
     "рыбалка": "fisch",
     "дорс": "doors",
@@ -68,6 +173,8 @@ SYNONYMS = {
     "арсенал": "arsenal",
     "джуджутсу": "jujutsu shenanigans",
     "форсакен": "forsaken",
+    "сан диего": "san diego",
+    "сандьего": "san diego",
 }
 
 DANGEROUS_PATTERNS = [
@@ -165,7 +272,7 @@ async def search_scripts_online(game_query: str) -> List[Dict[str, Any]]:
                 "script_code": v["script_code"],
                 "source": v["source"],
                 "is_verified": True,
-                "features": post_builder.generate_ai_features(v["game_name"]),
+                "features": v.get("features") or post_builder.generate_ai_features(v["game_name"]),
                 "safety_note": "Проверено: 100% чистый скрипт без ключа (PulseHub)",
                 "image_url": v.get("image_url"),
             })

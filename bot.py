@@ -22,6 +22,7 @@ from aiogram.types import (
     FSInputFile,
     CallbackQuery,
     Message,
+    PollAnswer,
 )
 from aiogram.client.default import DefaultBotProperties
 import aiohttp
@@ -66,7 +67,7 @@ bot = Bot(
 )
 dp = Dispatcher(storage=MemoryStorage())
 
-# Permanent Master Admin (@olarbebe)
+# Permanent Master Admin ID
 PRIMARY_ADMIN_ID = 5891418490
 
 # Helpers
@@ -80,6 +81,27 @@ async def is_admin(user_id: int) -> bool:
     if saved_admin and saved_admin.isdigit() and int(saved_admin) == user_id:
         return True
     return False
+
+async def notify_primary_admin(text: str, reply_markup=None):
+    """Sends notification to master admin."""
+    admin_id = PRIMARY_ADMIN_ID
+    try:
+        await bot.send_message(chat_id=admin_id, text=text, reply_markup=reply_markup, disable_web_page_preview=True)
+    except Exception as e:
+        logger.warning(f"Could not notify admin {admin_id}: {e}")
+
+def get_user_chat_link(user) -> str:
+    if not user:
+        return "https://t.me"
+    if user.username:
+        return f"https://t.me/{user.username}"
+    return f"tg://user?id={user.id}"
+
+def format_user_mention(user) -> str:
+    if not user:
+        return "Неизвестный"
+    label = f"@{user.username}" if user.username else (user.full_name or f"ID {user.id}")
+    return f'<a href="{get_user_chat_link(user)}">{html.escape(label)}</a>'
 
 async def check_user_subscription(user_id: int, channel: str) -> bool:
     """Strictly checks if user is subscribed to the channel."""
@@ -804,29 +826,21 @@ def build_channel_header_text(bot_username: str) -> str:
     return (
         "⚡ <b>ДОБРО ПОЖАЛОВАТЬ В SCRIPT DROP!</b> ⚡\n"
         "━━━━━━━━━━━━━━━━━━━━━\n"
-        "🔥 <i>Самый проверенный и безопасный источник скриптов для Roblox.</i>\n\n"
-        "🛡 <b>БЕЗ ВИРУСОВ, СТИЛЕРОВ И РЕКЛАМЫ:</b>\n"
-        "Все скрипты проверяются администрацией перед публикацией. "
-        "Только открытые и чистые loadstring-скрипты.\n\n"
-        "━━━━━━━━━━━━━━━━━━━━━\n"
+        "🔥 <i>Проверенные и безопасные скрипты для Roblox.</i>\n\n"
+        "🛡 <b>ПРОВЕРКА НА ВИРУСЫ И СТИЛЕРЫ:</b>\n"
+        "Каждый скрипт проверяется перед публикацией. Никаких RAT, скрытых вебхуков или стилеров — только чистый и рабочий loadstring.\n\n"
         "🚀 <b>КАК ПОЛУЧИТЬ СКРИПТ:</b>\n"
-        "1️⃣ Выберите нужную игру в постах канала\n"
+        "1️⃣ Выберите нужную игру в ленте канала\n"
         "2️⃣ Нажмите под постом кнопку <b>«🚀 Получить скрипт»</b>\n"
-        f"3️⃣ Наш бот @{bot_username} мгновенно выдаст код с кнопкой копирования!\n\n"
+        f"3️⃣ Бот @{bot_username} выдаст готовый код с кнопкой копирования!\n\n"
+        "📱 <b>ИНЖЕКТОРЫ (ЧЕМ ЗАПУСКАТЬ):</b>\n"
+        "• <b>Телефон:</b> Delta Executor (свежий APK закреплён в канале!)\n"
+        "• <b>ПК:</b> Solara, Wave, Codex PC, Xeno.\n\n"
+        "📊 <b>ОПРОСЫ НА ИГРЫ:</b>\n"
+        "Каждый день в 12:00 голосуйте в опросе, на какую игру хотите следующий чит!\n\n"
         "━━━━━━━━━━━━━━━━━━━━━\n"
-        "📱 <b>ЧЕМ ЗАПУСКАТЬ (ИНЖЕКТОРЫ):</b>\n"
-        "• <b>Телефон (Android):</b> Delta Executor — свежая версия всегда закреплена выше в канале! Также работают: Codex, Arceus X, Fluxus.\n"
-        "• <b>Компьютер (PC):</b> Solara, Wave, Codex PC, Xeno.\n\n"
-        "━━━━━━━━━━━━━━━━━━━━━\n"
-        "🔍 <b>ПОИСК СКРИПТОВ ЧЕРЕЗ БОТА:</b>\n"
-        f"Напишите нашему боту @{bot_username} название игры (например: <code>Blade Ball</code>, <code>Blox Fruits</code>, <code>Rivals</code>) — он найдёт последний рабочий скрипт!\n\n"
-        "📌 <b>ОСНОВНЫЕ ТЕГИ КАНАЛА:</b>\n"
-        "#BloxFruits  #BladeBall  #StealAnEgg\n"
-        "#Rivals  #MM2  #BedWars  #DaHood\n\n"
-        "━━━━━━━━━━━━━━━━━━━━━\n"
-        f"🤖 <b>Бот выдачи:</b> @{bot_username}\n"
-        "👑 <b>Владелец:</b> @olarbebe\n\n"
-        "⭐ <i>Включите уведомления, чтобы не пропускать обновления скриптов после апдейтов Roblox!</i>"
+        f"🤖 <b>Бот выдачи скриптов:</b> @{bot_username}\n"
+        "⭐ <i>Включите уведомления, чтобы не пропускать новые дропы!</i>"
     )
 
 @dp.callback_query(F.data == "admin_post_header")
@@ -873,9 +887,14 @@ async def execute_post_header(call: CallbackQuery):
     )
 
     try:
+        sent = None
         if config.BANNER_PATH.exists():
             photo = FSInputFile(config.BANNER_PATH)
-            sent = await bot.send_photo(chat_id=channel, photo=photo, caption=header_text, reply_markup=header_kb)
+            if len(header_text) <= 1024:
+                sent = await bot.send_photo(chat_id=channel, photo=photo, caption=header_text, reply_markup=header_kb)
+            else:
+                await bot.send_photo(chat_id=channel, photo=photo)
+                sent = await bot.send_message(chat_id=channel, text=header_text, reply_markup=header_kb)
         else:
             sent = await bot.send_message(chat_id=channel, text=header_text, reply_markup=header_kb)
 
@@ -1113,17 +1132,17 @@ async def callback_save_found(call: CallbackQuery):
 def build_changelog_preview_kb(current_style: str = "cyber") -> InlineKeyboardMarkup:
     """Builds interactive style switcher keyboard for changelog preview."""
     styles = [
-        ("cyber", "⚡ Кибер"),
-        ("hype", "🔥 Хайп"),
-        ("minimal", "💎 Минимал"),
-        ("dev", "🛠 Dev"),
+        ("cyber", "⚡ Кибер 1.1"),
+        ("hype", "🔥 Хайп 1.1"),
+        ("minimal", "💎 Простой 1.1"),
+        ("dev", "🛠 Разбор 1.1"),
     ]
     style_buttons = []
     for s_key, s_label in styles:
         label = f"✅ {s_label}" if s_key == current_style else s_label
         style_buttons.append(InlineKeyboardButton(text=label, callback_data=f"cl_style:{s_key}"))
 
-    active_name = dict(styles).get(current_style, "⚡ Кибер")
+    active_name = dict(styles).get(current_style, "⚡ Кибер 1.1")
 
     keyboard = [
         style_buttons,
@@ -1156,9 +1175,8 @@ async def prompt_post_changelog(call: CallbackQuery):
     banner_to_use = preview_banner if (preview_banner and preview_banner.exists()) else config.BANNER_PATH
 
     caption = (
-        f"📢 <b>Предпросмотр поста обновления (Стиль: ⚡ Кибер):</b>\n\n"
-        f"{changelog_text}\n\n"
-        f"<i>💡 Нажимайте кнопки ниже, чтобы переключить стиль текста!</i>"
+        f"📢 <b>Предпросмотр поста 1.1 (⚡ Кибер 1.1):</b>\n\n"
+        f"{changelog_text}"
     )
 
     if banner_to_use.exists():
@@ -1189,12 +1207,11 @@ async def handle_changelog_style_change(call: CallbackQuery):
     kb = build_changelog_preview_kb(new_style)
 
     style_meta = post_builder.CHANGELOG_STYLES.get(new_style, {})
-    style_name = style_meta.get("full_name", new_style)
+    style_name = style_meta.get("name", new_style)
 
     new_caption = (
-        f"📢 <b>Предпросмотр поста обновления (Стиль: {style_name}):</b>\n\n"
-        f"{changelog_text}\n\n"
-        f"<i>💡 Нажимайте кнопки ниже, чтобы переключить стиль текста!</i>"
+        f"📢 <b>Предпросмотр поста 1.1 ({style_name}):</b>\n\n"
+        f"{changelog_text}"
     )
 
     try:
@@ -1228,12 +1245,11 @@ async def handle_changelog_random_style(call: CallbackQuery):
     kb = build_changelog_preview_kb(next_style)
 
     style_meta = post_builder.CHANGELOG_STYLES.get(next_style, {})
-    style_name = style_meta.get("full_name", next_style)
+    style_name = style_meta.get("name", next_style)
 
     new_caption = (
-        f"📢 <b>Предпросмотр поста обновления (Стиль: {style_name}):</b>\n\n"
-        f"{changelog_text}\n\n"
-        f"<i>💡 Нажимайте кнопки ниже, чтобы переключить стиль текста!</i>"
+        f"📢 <b>Предпросмотр поста 1.1 ({style_name}):</b>\n\n"
+        f"{changelog_text}"
     )
 
     try:
@@ -1269,8 +1285,8 @@ async def execute_post_changelog(call: CallbackQuery):
 
     changelog_kb = InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="🤖 Открыть бота со скриптами ↗", url=f"https://t.me/{bot_user}")],
-            [InlineKeyboardButton(text="📱 Открыть Mini App каталог ↗", url=f"https://t.me/{bot_user}")],
+            [InlineKeyboardButton(text="🤖 Запустить бота для получения скриптов ↗", url=f"https://t.me/{bot_user}")],
+            [InlineKeyboardButton(text=f"📢 Наш канал @{channel_clean} ↗", url=f"https://t.me/{channel_clean}")],
         ]
     )
 
@@ -1278,9 +1294,14 @@ async def execute_post_changelog(call: CallbackQuery):
     banner_to_use = update_banner if (update_banner and update_banner.exists()) else config.BANNER_PATH
 
     try:
+        sent = None
         if banner_to_use.exists():
             photo = FSInputFile(banner_to_use)
-            sent = await bot.send_photo(chat_id=channel, photo=photo, caption=changelog_text, reply_markup=changelog_kb)
+            if len(changelog_text) <= 1024:
+                sent = await bot.send_photo(chat_id=channel, photo=photo, caption=changelog_text, reply_markup=changelog_kb)
+            else:
+                await bot.send_photo(chat_id=channel, photo=photo)
+                sent = await bot.send_message(chat_id=channel, text=changelog_text, reply_markup=changelog_kb)
         else:
             sent = await bot.send_message(chat_id=channel, text=changelog_text, reply_markup=changelog_kb)
 
@@ -1301,7 +1322,7 @@ async def execute_post_changelog(call: CallbackQuery):
 
         style_name = post_builder.CHANGELOG_STYLES.get(chosen_style, {}).get("name", chosen_style)
         await call.message.answer(
-            f"🎉 <b>Changelog 2.0 (стиль: {style_name}) успешно опубликован и закреплён в @{channel_clean}!</b>\n\n"
+            f"🎉 <b>Пост обновления 1.1 (стиль: {style_name}) успешно опубликован и закреплён в @{channel_clean}!</b>\n\n"
             f"Ссылка на пост: <a href=\"{post_url}\">{post_url}</a>",
             reply_markup=confirm_kb,
             disable_web_page_preview=True
@@ -1309,97 +1330,160 @@ async def execute_post_changelog(call: CallbackQuery):
         await call.answer("✅ Опубликовано в канал!")
     except Exception as e:
         logger.error(f"Error posting changelog: {e}")
-        await call.message.answer(f"❌ <b>Ошибка при публикации Changelog:</b>\n<code>{e}</code>")
+        await call.message.answer(f"❌ <b>Ошибка при публикации обновления 1.1:</b>\n<code>{e}</code>")
         await call.answer("Ошибка")
 
 
-# --- USER SEARCH HANDLER ---
-
+# --- USER / ADMIN TEXT MESSAGE HANDLER ---
 
 @dp.message(F.text)
-async def handle_user_search(message: Message, state: FSMContext):
-    # Ignore if in an FSM state or command
+async def handle_user_text_message(message: Message, state: FSMContext):
+    # Ignore if in an active FSM state or command
     if await state.get_state():
         return
     text = message.text.strip()
     if text.startswith("/"):
         return
 
+    user_id = message.from_user.id if message.from_user else 0
+    is_user_admin = await is_admin(user_id)
+
     channel = await database.get_setting("channel_id", config.CHANNEL_ID)
     channel_clean = channel.replace("@", "") if channel else "script_drop"
-    bot_info = await bot.get_me()
-    bot_user = bot_info.username or config.BOT_USERNAME
+    channel_url = f"https://t.me/{channel_clean}"
 
-    results = await database.search_scripts(text, limit=5)
-    if not results:
-        # Dynamic online fallback so user always gets working scripts
-        online_res = await script_finder.search_scripts_online(text)
-        if online_res:
-            best = online_res[0]
-            new_key = await database.add_script(
-                game_name=best["game_name"],
-                features=best["features"],
-                script_code=best["script_code"],
-                executors=post_builder.DEFAULT_EXECUTORS,
-                image_url=best.get("image_url")
-            )
-            saved_item = await database.get_script(new_key)
-            if saved_item:
-                results = [saved_item]
-
-    if not results:
-        kb = InlineKeyboardMarkup(
-            inline_keyboard=[
-                [InlineKeyboardButton(text="📢 Искать в канале @script_drop", url=f"https://t.me/{channel_clean}")],
-                [InlineKeyboardButton(text="📱 Открыть каталог", web_app=WebAppInfo(url=get_webapp_url()))],
-            ]
-        )
-        await message.answer(
-            f"🔍 По запросу «<b>{text}</b>» скриптов пока нет.\n\n"
-            f"Попробуйте написать название игры на английском (например: <code>Blox Fruits</code>, <code>Blade Ball</code>, <code>Steal an Egg</code>) или посмотрите свежие релизы в нашем канале! 👇",
-            reply_markup=kb,
-        )
+    # 1. ADMIN ONLY: Search engine for the creator to quickly find & drop scripts
+    if is_user_admin:
+        await state.set_state(AdminScriptSearch.waiting_for_game_query)
+        await process_admin_search_query(message, state)
         return
 
-    # Take the latest matching script
-    latest = results[0]
-    game_name = latest["game_name"]
-    script_key = latest["script_key"]
-    features = latest.get("features", "")
-    executors = latest.get("executors", post_builder.DEFAULT_EXECUTORS)
-    channel_msg_id = latest.get("channel_message_id")
+    # 2. SUBSCRIBERS: Ready scripts are published in channel; forward request to admin
+    user_mention = format_user_mention(message.from_user)
+    user_link = get_user_chat_link(message.from_user)
+    alert_kb = InlineKeyboardMarkup(
+        inline_keyboard=[[InlineKeyboardButton(text="💬 Написать подписчику", url=user_link)]]
+    )
+    admin_alert = (
+        "📩 <b>Подписчик написал в бот / запросил игру:</b>\n"
+        "━━━━━━━━━━━━━━━━━━━━━\n"
+        f"👤 <b>От кого:</b> {user_mention} (<code>{user_id}</code>)\n"
+        f"🎮 <b>Сообщение/игра:</b> «<code>{html.escape(text)}</code>»\n\n"
+        "⚡ <i>Вы можете найти чит в админке («🔍 Поиск скриптов») и выложить готовый пост в канал!</i>"
+    )
+    asyncio.create_task(notify_primary_admin(admin_alert, reply_markup=alert_kb))
 
-    msg_text = (
-        f"🔍 <b>Найден скрипт для игры: {game_name}</b> ⚡\n\n"
-        f"🛠 <b>Функционал последнего релиза:</b>\n"
-        f"{features}\n\n"
-        f"📱 <b>Поддержка:</b> {executors}\n"
-        f"📌 <b>Статус:</b> 🟢 <i>Работает / Undetected</i>\n\n"
-        f"👇 <b>Выберите действие:</b>"
+    kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text=f"📢 Перейти в канал @{channel_clean} ↗", url=channel_url)],
+        ]
+    )
+    await message.answer(
+        "👋 <b>Все готовые и проверенные скрипты публикуются в нашем канале!</b>\n\n"
+        "📌 <b>Как получить рабочий скрипт:</b>\n"
+        f"1️⃣ Перейдите в наш канал <b>@{channel_clean}</b>\n"
+        "2️⃣ Найдите пост с нужной игрой в ленте\n"
+        "3️⃣ Нажмите кнопку <b>«🚀 Получить скрипт»</b> под постом — и бот моментально выдаст готовый код без рекламы и вирусов!\n\n"
+        f"🎮 <i>Ваш запрос на «<b>{html.escape(text)}</b>» передан админу. Скоро проверенный чит появится в канале!</i>\n\n"
+        "📊 <i>Также вы можете голосовать за любимую игру в ежедневном опросе в канале (каждый день в 12:00)!</i>",
+        reply_markup=kb,
     )
 
-    kb_buttons = []
-    if channel_msg_id:
-        post_url = f"https://t.me/{channel_clean}/{channel_msg_id}"
-        kb_buttons.append([InlineKeyboardButton(text="🚀 Перейти к посту в канале ↗", url=post_url)])
 
-    deep_link = f"https://t.me/{bot_user}?start={script_key}"
-    kb_buttons.append([InlineKeyboardButton(text="⚡ Получить скрипт в боте", url=deep_link)])
+@dp.message(F.photo | F.document | F.video | F.voice)
+async def handle_user_media(message: Message, state: FSMContext):
+    """Notifies admin whenever a subscriber sends media/screenshot (e.g. error in Delta)."""
+    if await state.get_state():
+        return
+    user = message.from_user
+    user_id = user.id if user else 0
+    if await is_admin(user_id):
+        return
 
-    if not channel_msg_id:
-        kb_buttons.append([InlineKeyboardButton(text="📢 Наш канал со скриптами ↗", url=f"https://t.me/{channel_clean}")])
+    caption = message.caption or "<i>Без подписи</i>"
+    user_mention = format_user_mention(user)
+    user_link = get_user_chat_link(user)
+    alert_kb = InlineKeyboardMarkup(
+        inline_keyboard=[[InlineKeyboardButton(text="💬 Ответить подписчику", url=user_link)]]
+    )
 
-    photo_url = latest.get("image_url")
-    sent = False
-    if photo_url and photo_url.startswith("http"):
-        try:
-            await message.answer_photo(photo=photo_url, caption=msg_text, reply_markup=InlineKeyboardMarkup(inline_keyboard=kb_buttons))
-            sent = True
-        except Exception:
-            pass
+    admin_text = (
+        "📸 <b>Подписчик прислал вложение/скриншот боту:</b>\n"
+        "━━━━━━━━━━━━━━━━━━━━━\n"
+        f"👤 <b>От кого:</b> {user_mention} (<code>{user_id}</code>)\n"
+        f"📝 <b>Подпись:</b> {caption}"
+    )
 
-    if not sent:
-        await message.answer(msg_text, reply_markup=InlineKeyboardMarkup(inline_keyboard=kb_buttons))
+    try:
+        await bot.send_message(chat_id=PRIMARY_ADMIN_ID, text=admin_text, reply_markup=alert_kb, disable_web_page_preview=True)
+        if message.photo:
+            await bot.send_photo(chat_id=PRIMARY_ADMIN_ID, photo=message.photo[-1].file_id)
+        elif message.document:
+            await bot.send_document(chat_id=PRIMARY_ADMIN_ID, document=message.document.file_id)
+    except Exception as e:
+        logger.warning(f"Could not forward user media to admin: {e}")
+
+    await message.answer(
+        "✅ <b>Ваш скриншот/сообщение получено создателем канала!</b>\n\n"
+        "Мы проверим его и свяжемся с вами."
+    )
+
+
+@dp.callback_query(F.data.startswith("req_game:"))
+async def handle_request_game_callback(call: CallbackQuery):
+    """Handles user game request button and alerts admin."""
+    game_req = call.data.split(":", 1)[1]
+    user = call.from_user
+    user_mention = format_user_mention(user)
+    user_link = get_user_chat_link(user)
+    alert_kb = InlineKeyboardMarkup(
+        inline_keyboard=[[InlineKeyboardButton(text="💬 Написать подписчику", url=user_link)]]
+    )
+    admin_alert = (
+        "🔥 <b>ПОДПИСЧИК ПРОСИТ СКРИПТ!</b> 🔥\n"
+        "━━━━━━━━━━━━━━━━━━━━━\n"
+        f"👤 <b>Пользователь:</b> {user_mention} (<code>{user.id}</code>)\n"
+        f"🎮 <b>Запросил игру:</b> «<code>{game_req}</code>»\n\n"
+        "⚡ <i>Перейдите в админ-панель -> «🔍 Найти скрипт», найдите рабочий чит и опубликуйте в канал!</i>"
+    )
+    await notify_primary_admin(admin_alert, reply_markup=alert_kb)
+    await call.answer("✅ Запрос отправлен создателю канала! Скоро чит появится в боте.", show_alert=True)
+
+
+# --- POLL ANSWER NOTIFIER ---
+
+@dp.poll_answer()
+async def handle_poll_answer(poll_answer: PollAnswer):
+    """Notifies admin whenever someone votes in a channel poll."""
+    user = poll_answer.user
+    user_id = user.id if user else 0
+    user_mention = format_user_mention(user)
+    user_link = get_user_chat_link(user)
+    alert_kb = InlineKeyboardMarkup(
+        inline_keyboard=[[InlineKeyboardButton(text="💬 Написать подписчику", url=user_link)]]
+    ) if user else None
+
+    _, options = post_builder.get_daily_poll_data()
+    picked_options = []
+    for opt_id in poll_answer.option_ids:
+        if opt_id < len(options):
+            picked_options.append(options[opt_id])
+        else:
+            picked_options.append(f"Вариант #{opt_id}")
+
+    chosen_str = ", ".join(picked_options) if picked_options else "Отозвал голос"
+
+    alert_text = (
+        "📊 <b>Новый голос в опросе канала @script_drop!</b>\n"
+        "━━━━━━━━━━━━━━━━━━━━━\n"
+        f"👤 <b>Подписчик:</b> {user_mention} (<code>{user_id}</code>)\n"
+        f"🗳 <b>Проголосовал за:</b> <b>{chosen_str}</b>"
+    )
+    if any("другая" in p.lower() for p in picked_options):
+        alert_text += "\n\n💡 <i>Подписчик выбрал «Другая (напиши боту)»! Ожидайте название игры от него в боте.</i>"
+
+    await notify_primary_admin(alert_text, reply_markup=alert_kb)
+
 
 # --- DAILY INTERACTIVE POLL (12:00 GMT+5) ---
 
@@ -1423,7 +1507,7 @@ async def publish_daily_poll(force: bool = False) -> bool:
             chat_id=channel,
             question=question,
             options=options,
-            is_anonymous=True,
+            is_anonymous=False,
             allows_multiple_answers=False,
         )
         await database.set_setting("last_daily_poll_date", today_str)
@@ -1601,7 +1685,7 @@ async def main():
     logger.info("Starting bot polling...")
     try:
         await bot.delete_webhook(drop_pending_updates=False)
-        await dp.start_polling(bot)
+        await dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())
     finally:
         autopost_task.cancel()
         keep_alive_task.cancel()

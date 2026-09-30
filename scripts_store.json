@@ -1,0 +1,145 @@
+{
+  "s0": {
+    "id": 0,
+    "script_key": "s0",
+    "slug": "pulsehub",
+    "game_name": "Pulse Hub Universal (Все в одном)",
+    "features": "• Авто-определение игры при запуске в Roblox\n• Без ключа (Keyless) и без ожидания\n• Поддержка: MM2, Steal an Egg, Rivals, BloxStrike, San Diego Border RP\n• Молниеносная загрузка без зависаний\n• Работает на Delta, Solara, Wave, Codex, Arceus X",
+    "script_code": "loadstring(game:HttpGet(\"https://raw.githubusercontent.com/PulseZax/Loader/refs/heads/main/.lua\"))()",
+    "executors": "ПК и Мобильные (Delta, Arceus X, Fluxus, Codex, Solara)",
+    "image_url": "https://pulsehub.gg/og.png",
+    "created_at": "2026-09-30 12:00:00"
+  },
+  "s1": {
+    "id": 1,
+    "script_key": "s1",
+    "slug": "bloxfruits",
+    "game_name": "Blox Fruits",
+    "features": "• [-- Auto Farm --]\n• [+] Auto Farm\n• [>] Auto Farm Mode\n• [>] Auto Farm Target\n• [~] Farm Distance",
+    "script_code": "loadstring(game:HttpGet(\"https://rawscripts.net/raw/Blox-Fruits-Atherhub-Auto-Level-Auto-Raid-Auto-Boss-BEST-Script-79550\"))()",
+    "executors": "ПК и Мобильные (Delta, Arceus X, Fluxus, Codex, Solara)",
+    "image_url": "https://tr.rbxcdn.com/180DAY-9562aea76052b8e6690596750b666b26/480/270/Image/Png/noFilter",
+    "created_at": "2026-09-30 12:00:00"
+  },
+  "s2": {
+    "id": 2,
+    "script_key": "s2",
+    "slug": "stealanegg",
+    "game_name": "Steal an Egg",
+    "features": "• Auto Steal by Rarity, Income & Weight (Кража редких яиц)\n• Steal Big Eggs mode (Кража огромных яиц по весу)\n• Anti Traps & Auto Escape Treadmill (Обход всех ловушек)\n• Hungry Monster Event Auto Farm (Авто-фарм ивента Монстра)\n• Auto Fuse & Auto Sell (Слияние и авто-продажа питомцев)\n• Full Egg ESP, Plot ESP & Player ESP (ВХ на яйца и базы)\n• Fly & Waypoint Teleport (Свободный полёт и телепорт)",
+    "script_code": "loadstring(game:HttpGet(\"https://raw.githubusercontent.com/PulseZax/Loader/refs/heads/main/.lua\"))()",
+    "executors": "ПК и Мобильные (Delta, Arceus X, Fluxus, Codex, Solara)",
+    "image_url": "https://pulsehub.gg/assets/art/steal-an-egg.webp",
+    "created_at": "2026-09-30 12:00:00"
+  },
+  "s3": {
+    "id": 3,
+    "script_key": "s3",
+    "slug": "murdermystery2",
+    "game_name": "Murder Mystery 2",
+    "features": "• Role ESP (ВХ на маньяка, шерифа, выпавший пистолет)\n• Silent Aim & Knife Throw Aimbot (Скрытый аимбот)\n• Kill Aura & Auto Shoot Murderer (Авто-убийство маньяка)\n• Auto Farm Coins (Молниеносный сбор монет с авто-уклонением)\n• Fly, Noclip, Infinite Jump & Desync (Свободный полёт)",
+    "script_code": "loadstring(game:HttpGet(\"https://raw.githubusercontent.com/PulseZax/Loader/refs/heads/main/.lua\"))()",
+    "executors": "ПК и Мобильные (Delta, Arceus X, Fluxus, Codex, Solara)",
+    "image_url": "https://pulsehub.gg/assets/art/mm2.webp",
+    "created_at": "2026-09-30 12:00:00"
+  },
+  "s4": {
+    "id": 4,
+    "script_key": "s4",
+    "slug": "rivals",
+    "game_name": "Rivals",
+    "features": "• Silent Aim with FOV & Prediction (Скрытый аимбот в голову)\n• 2D Box & Skeleton ESP (ВХ сквозь любые стены с HP)\n• No Recoil, No Spread & Rapid Fire (Стрельба без отдачи)\n• Auto Shoot / TriggerBot (Авто-выстрел при наведении)\n• BunnyHop & Speed Boost (Распрыжка и скорость)",
+    "script_code": "loadstring(game:HttpGet(\"https://raw.githubusercontent.com/PulseZax/Loader/refs/heads/main/.lua\"))()",
+    "executors": "ПК и Мобильные (Delta, Arceus X, Fluxus, Codex, Solara)",
+    "image_url": "https://pulsehub.gg/assets/art/rivals.webp",
+    "created_at": "2026-09-30 12:00:00"
+  },
+  "s5": {
+    "id": 5,
+    "script_key": "s5",
+    "slug": "bladeball",
+    "game_name": "Blade Ball",
+    "features": "• # ⚔️ PROJECT STARK - BLADE BALL EDITION 🎯\n• 🔥 **THE ULTIMATE AUTO-PARRY DOMINATION SCRIPT** 🔥\n• ## ⚡ COMBAT FEATURES\n• 🎯 **Auto Parry System**\n• 🤖 Machine Mode - Frame-perfect parries",
+    "script_code": "loadstring(game:HttpGet(\"https://rawscripts.net/raw/Blade-Ball-Project-Stark-Free-Hub-59919\"))()",
+    "executors": "ПК и Мобильные (Delta, Arceus X, Fluxus, Codex, Solara)",
+    "image_url": "https://tr.rbxcdn.com/180DAY-be150ba07c74cd57deb31791c2675323/480/270/Image/Png/noFilter",
+    "created_at": "2026-09-30 12:00:00"
+  },
+  "s6": {
+    "id": 6,
+    "script_key": "s6",
+    "slug": "forsaken",
+    "game_name": "Forsaken",
+    "features": "• Invincible (does not work on clones)\n• You can become invisible and have god mode while still being able to use abilities like normal and do generators\n• Auto Generator(s)\n• The generator that you try to fix will be automatically completed\n• Stamina preset",
+    "script_code": "loadstring(game:HttpGet(\"https://rawscripts.net/raw/Forsaken-Plus-216770\"))()",
+    "executors": "ПК и Мобильные (Delta, Arceus X, Fluxus, Codex, Solara)",
+    "image_url": "https://scriptblox.com/images/script/18687417158-1789721518787.png",
+    "created_at": "2026-09-30 12:00:00"
+  },
+  "s7": {
+    "id": 7,
+    "script_key": "s7",
+    "slug": "fisch",
+    "game_name": "Fisch",
+    "features": "• IMPORTANT NOTICE: READ BEFORE YOU EXECUTE\n• Auto Cast\n• Auto Shake\n• Auto Fish\n• Auto Sell",
+    "script_code": "loadstring(game:HttpGet(\"https://rawscripts.net/raw/Fisch-Blackhub-Best-Undetected-Script-53591\"))()",
+    "executors": "ПК и Мобильные (Delta, Arceus X, Fluxus, Codex, Solara)",
+    "image_url": "https://tr.rbxcdn.com/180DAY-391139542b53fa1fb3cbef7da9944147/480/270/Image/Png/noFilter",
+    "created_at": "2026-09-30 12:00:00"
+  },
+  "s8": {
+    "id": 8,
+    "script_key": "s8",
+    "slug": "doors",
+    "game_name": "Doors",
+    "features": "• Key, Lever & Item ESP (Подсветка всех ключей, рычагов и лута)\n• Entity Warning (Звуковое и визуальное оповещение о монстрах)\n• Auto Unlock / Instant Open (Мгновенное открытие дверей)\n• Fullbright & Speed (Яркое освещение в темноте и скорость)\n• Godmode against Screech & Rush (Защита от монстров)",
+    "script_code": "loadstring(game:HttpGet(\"https://rawscripts.net/raw/DOORS-SCRIPT-XENO-OPTIMIZED-67738\"))()",
+    "executors": "ПК и Мобильные (Delta, Arceus X, Fluxus, Codex, Solara)",
+    "image_url": "https://tr.rbxcdn.com/180DAY-ac6d2b831ee486c141dfd677af0cabcb/480/270/Image/Png/noFilter",
+    "created_at": "2026-09-30 12:00:00"
+  },
+  "s9": {
+    "id": 9,
+    "script_key": "s9",
+    "slug": "bedwars",
+    "game_name": "Bedwars",
+    "features": "• Killaura / Attack Aura (Авто-атака всех противников в радиусе)\n• Bed ESP & Chest Stealer (Подсветка кроватей и авто-лут сундуков)\n• Scaffold / Fly (Автоматическое строительство блоков под собой)\n• Velocity / Anti-Knockback (Полное отсутствие отдачи при ударах)\n• Infinite Jump & Sprint (Бесконечные прыжки и спринт)",
+    "script_code": "loadstring(game:HttpGet(\"https://rawscripts.net/raw/Universal-Script-Radius-Hub-15-Games-61719\"))()",
+    "executors": "ПК и Мобильные (Delta, Arceus X, Fluxus, Codex, Solara)",
+    "image_url": "https://tr.rbxcdn.com/180DAY-1a9f4e0795cced66ceba279da50309c3/480/270/Image/Png/noFilter",
+    "created_at": "2026-09-30 12:00:00"
+  },
+  "s10": {
+    "id": 10,
+    "script_key": "s10",
+    "slug": "dahood",
+    "game_name": "Da Hood",
+    "features": "• ESP (Подсветка игроков / предметов)\n• Auto Farm (Автоматический фарм)\n• WalkSpeed & JumpPower (Скорость и прыжок)\n• Teleport / Safe Zone (Телепортация)",
+    "script_code": "loadstring(game:HttpGet(\"https://rawscripts.net/raw/Universal-Script-Universal-Da-Hood-Silent-Aim-Keyless-223972\"))()",
+    "executors": "ПК и Мобильные (Delta, Arceus X, Fluxus, Codex, Solara)",
+    "image_url": "https://scriptblox.com/images/script/0-1786832943076.png",
+    "created_at": "2026-09-30 12:00:00"
+  },
+  "s11": {
+    "id": 11,
+    "script_key": "s11",
+    "slug": "bloxstrike",
+    "game_name": "BloxStrike",
+    "features": "• Legit & Silent Aim с профилями под каждое оружие\n• Skin Changer (Все скины на ножи, перчатки и оружие)\n• ESP Boxes, Chams & Skeleton (Полный ВХ)\n• Grenade Helper & Bomb Defuse Timer (Траектория гранат)\n• Auto Buy (Авто-закупка брони и оружия)",
+    "script_code": "loadstring(game:HttpGet(\"https://raw.githubusercontent.com/PulseZax/Loader/refs/heads/main/.lua\"))()",
+    "executors": "ПК и Мобильные (Delta, Arceus X, Fluxus, Codex, Solara)",
+    "image_url": "https://pulsehub.gg/assets/icons/blox-strike.webp",
+    "created_at": "2026-09-30 12:00:00"
+  },
+  "s12": {
+    "id": 12,
+    "script_key": "s12",
+    "slug": "sandiego",
+    "game_name": "San Diego Border Roleplay",
+    "features": "• Auto Smuggle (Полный цикл авто-контрабанды с продажей)\n• Garage & Car Tuning (Тюнинг машин, скорость, полный привод)\n• Silent Aim & Wall Shot (Стрельба сквозь препятствия)\n• Vehicle & Player ESP (Подсветка машин и игроков)",
+    "script_code": "loadstring(game:HttpGet(\"https://raw.githubusercontent.com/PulseZax/Loader/refs/heads/main/.lua\"))()",
+    "executors": "ПК и Мобильные (Delta, Arceus X, Fluxus, Codex, Solara)",
+    "image_url": "https://pulsehub.gg/assets/art/san-diego.webp",
+    "created_at": "2026-09-30 12:00:00"
+  }
+}
