@@ -25,7 +25,6 @@ BANNER_DELIVERY = BASE_DIR / "banner_delivery.jpg"
 BANNER_DELTA = BASE_DIR / "banner_delta.jpg"
 BANNER_UPDATE = BASE_DIR / "banner_update.png"
 BANNER_SUGGEST = BASE_DIR / "banner_suggest.jpg"
-BANNER_CRIMSON = BASE_DIR / "banner_crimson.jpg"
 AVATAR_PATH = BASE_DIR / "avatar.jpg"
 WEBAPP_DIR = BASE_DIR / "webapp"
 

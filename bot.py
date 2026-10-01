@@ -418,12 +418,12 @@ async def handle_admin(message: Message):
 
 @dp.callback_query(F.data == "open_admin_panel")
 async def callback_admin_panel(call: CallbackQuery):
+    await call.answer()
     user_id = call.from_user.id
     if not await is_admin(user_id):
-        await call.answer("⛔ Нет доступа", show_alert=True)
+        await call.message.answer("⛔ У вас нет доступа к панели администратора.")
         return
     await send_admin_panel(chat_id=call.message.chat.id, user_id=user_id)
-    await call.answer()
 
 # --- FSM: MANUAL POST CREATION ---
 
@@ -1521,129 +1521,144 @@ async def process_user_script_suggest(message: Message, state: FSMContext):
 
 @dp.callback_query(F.data == "admin_script_requests")
 async def callback_admin_script_requests(call: CallbackQuery):
+    await call.answer()
     if not await is_admin(call.from_user.id):
-        await call.answer("⛔ Нет доступа", show_alert=True)
+        await call.message.answer("⛔ У вас нет доступа к панели администратора.")
         return
 
-    stats = await database.get_script_request_stats()
-    pending = await database.get_script_requests(status="pending", limit=6)
-
-    # Top games list
-    top_games = stats.get("top_games", [])
-    if top_games:
-        top_lines = []
-        for i, tg in enumerate(top_games[:5], 1):
-            top_lines.append(f"{i}. 🎮 <b>{html.escape(tg['game'])}</b> — <b>{tg['count']}</b> запрос(ов)")
-        top_text = "\n".join(top_lines)
-    else:
-        top_text = "<i>Запросов пока нет</i>"
-
-    # Pending list
-    if pending:
-        req_lines = []
-        for r in pending:
-            u_name = f"@{r['username']}" if r.get('username') else f"ID {r['user_id']}"
-            req_lines.append(f"• #{r['id']} 🎮 <b>{html.escape(r['game_name'])}</b> (от {u_name})")
-        pending_text = "\n".join(req_lines)
-    else:
-        pending_text = "<i>Все запросы обработаны! Новых пока нет 🎉</i>"
-
-    text = (
-        "💡 <b>Предложения подписчиков & Статистика запросов</b>\n"
-        "━━━━━━━━━━━━━━━━━━━━━\n"
-        "📊 <b>Общая статистика:</b>\n"
-        f"• 📩 Всего предложений: <b>{stats['total']}</b>\n"
-        f"• ⏳ Ожидают скрипта: <b>{stats['pending']}</b>\n"
-        f"• ✅ Опубликовано / Закрыто: <b>{stats['published']}</b>\n"
-        f"• 👥 Уникальных подписчиков: <b>{stats['unique_users']}</b>\n\n"
-        "🔥 <b>Топ запрашиваемых игр подписчиками:</b>\n"
-        f"{top_text}\n\n"
-        "📋 <b>Свежие запросы (ждут скрипта):</b>\n"
-        f"{pending_text}\n"
-        "━━━━━━━━━━━━━━━━━━━━━\n"
-        "<i>Нажмите на кнопку с игрой ниже, чтобы моментально найти чит без ключей:</i>"
-    )
-
-    buttons = []
-    for r in pending:
-        short_name = r['game_name'][:18]
-        buttons.append([
-            InlineKeyboardButton(text=f"🔍 {short_name}", callback_data=f"req_search:{r['id']}"),
-            InlineKeyboardButton(text="✅", callback_data=f"req_done:{r['id']}"),
-            InlineKeyboardButton(text="🗑", callback_data=f"req_del:{r['id']}"),
-        ])
-
-    buttons.append([
-        InlineKeyboardButton(text="📋 История выполненных", callback_data="admin_req_history"),
-        InlineKeyboardButton(text="🔄 Обновить", callback_data="admin_script_requests"),
-    ])
-    buttons.append([InlineKeyboardButton(text="👑 В меню админа", callback_data="open_admin_panel")])
-
-    kb = InlineKeyboardMarkup(inline_keyboard=buttons)
     try:
-        await call.message.edit_text(text, reply_markup=kb)
-    except Exception:
-        await call.message.answer(text, reply_markup=kb)
-    await call.answer()
+        stats = await database.get_script_request_stats()
+        pending = await database.get_script_requests(status="pending", limit=6)
+
+        # Top games list
+        top_games = stats.get("top_games", [])
+        if top_games:
+            top_lines = []
+            for i, tg in enumerate(top_games[:5], 1):
+                g_title = str(tg.get("game") or "Игра")
+                top_lines.append(f"{i}. 🎮 <b>{html.escape(g_title)}</b> — <b>{tg.get('count', 1)}</b> запрос(ов)")
+            top_text = "\n".join(top_lines)
+        else:
+            top_text = "<i>Запросов пока нет</i>"
+
+        # Pending list
+        if pending:
+            req_lines = []
+            for r in pending:
+                u_name = f"@{r['username']}" if r.get('username') else f"ID {r['user_id']}"
+                g_name = str(r.get("game_name") or "Без названия")
+                req_lines.append(f"• #{r['id']} 🎮 <b>{html.escape(g_name)}</b> (от {u_name})")
+            pending_text = "\n".join(req_lines)
+        else:
+            pending_text = "<i>Все запросы обработаны! Новых пока нет 🎉</i>"
+
+        text = (
+            "💡 <b>Предложения подписчиков & Статистика запросов</b>\n"
+            "━━━━━━━━━━━━━━━━━━━━━\n"
+            "📊 <b>Общая статистика:</b>\n"
+            f"• 📩 Всего предложений: <b>{stats.get('total', 0)}</b>\n"
+            f"• ⏳ Ожидают скрипта: <b>{stats.get('pending', 0)}</b>\n"
+            f"• ✅ Опубликовано / Закрыто: <b>{stats.get('published', 0)}</b>\n"
+            f"• 👥 Уникальных подписчиков: <b>{stats.get('unique_users', 0)}</b>\n\n"
+            "🔥 <b>Топ запрашиваемых игр подписчиками:</b>\n"
+            f"{top_text}\n\n"
+            "📋 <b>Свежие запросы (ждут скрипта):</b>\n"
+            f"{pending_text}\n"
+            "━━━━━━━━━━━━━━━━━━━━━\n"
+            "<i>Нажмите на кнопку с игрой ниже, чтобы моментально найти чит без ключей:</i>"
+        )
+
+        buttons = []
+        for r in pending:
+            short_name = str(r.get('game_name') or 'Скрипт')[:18]
+            buttons.append([
+                InlineKeyboardButton(text=f"🔍 {short_name}", callback_data=f"req_search:{r['id']}"),
+                InlineKeyboardButton(text="✅", callback_data=f"req_done:{r['id']}"),
+                InlineKeyboardButton(text="🗑", callback_data=f"req_del:{r['id']}"),
+            ])
+
+        buttons.append([
+            InlineKeyboardButton(text="📋 История выполненных", callback_data="admin_req_history"),
+            InlineKeyboardButton(text="🔄 Обновить", callback_data="admin_script_requests"),
+        ])
+        buttons.append([InlineKeyboardButton(text="👑 В меню админа", callback_data="open_admin_panel")])
+
+        kb = InlineKeyboardMarkup(inline_keyboard=buttons)
+        try:
+            await call.message.edit_text(text, reply_markup=kb)
+        except Exception:
+            await call.message.answer(text, reply_markup=kb)
+    except Exception as e:
+        logger.error(f"Error in callback_admin_script_requests: {e}")
+        await call.message.answer(f"❌ Ошибка отображения статистики: {e}")
 
 
 @dp.callback_query(F.data == "admin_req_history")
 async def callback_admin_req_history(call: CallbackQuery):
+    await call.answer()
     if not await is_admin(call.from_user.id):
-        await call.answer("⛔ Нет доступа", show_alert=True)
+        await call.message.answer("⛔ Нет доступа к панели администратора.")
         return
 
-    history = await database.get_script_requests(status="published", limit=10)
-    if not history:
-        history_text = "<i>История пуста — ещё ни один запрос не был отмечен как выполненный.</i>"
-    else:
-        lines = []
-        for r in history:
-            u_name = f"@{r['username']}" if r.get('username') else f"ID {r['user_id']}"
-            lines.append(f"• #{r['id']} 🎮 <b>{html.escape(r['game_name'])}</b> (от {u_name}) — ✅")
-        history_text = "\n".join(lines)
-
-    text = (
-        "📋 <b>История выполненных предложений:</b>\n"
-        "━━━━━━━━━━━━━━━━━━━━━\n"
-        f"{history_text}\n"
-    )
-
-    kb = InlineKeyboardMarkup(
-        inline_keyboard=[
-            [InlineKeyboardButton(text="🔙 Назад к статистике", callback_data="admin_script_requests")],
-            [InlineKeyboardButton(text="👑 В меню админа", callback_data="open_admin_panel")],
-        ]
-    )
     try:
-        await call.message.edit_text(text, reply_markup=kb)
-    except Exception:
-        await call.message.answer(text, reply_markup=kb)
-    await call.answer()
+        history = await database.get_script_requests(status="published", limit=10)
+        if not history:
+            history_text = "<i>История пуста — ещё ни один запрос не был отмечен как выполненный.</i>"
+        else:
+            lines = []
+            for r in history:
+                u_name = f"@{r['username']}" if r.get('username') else f"ID {r['user_id']}"
+                g_name = str(r.get("game_name") or "Без названия")
+                lines.append(f"• #{r['id']} 🎮 <b>{html.escape(g_name)}</b> (от {u_name}) — ✅")
+            history_text = "\n".join(lines)
+
+        text = (
+            "📋 <b>История выполненных предложений:</b>\n"
+            "━━━━━━━━━━━━━━━━━━━━━\n"
+            f"{history_text}\n"
+        )
+
+        kb = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [InlineKeyboardButton(text="🔙 Назад к статистике", callback_data="admin_script_requests")],
+                [InlineKeyboardButton(text="👑 В меню админа", callback_data="open_admin_panel")],
+            ]
+        )
+        try:
+            await call.message.edit_text(text, reply_markup=kb)
+        except Exception:
+            await call.message.answer(text, reply_markup=kb)
+    except Exception as e:
+        logger.error(f"Error in callback_admin_req_history: {e}")
+        await call.message.answer(f"❌ Ошибка загрузки истории: {e}")
 
 
 @dp.callback_query(F.data.startswith("req_done:"))
 async def callback_req_done(call: CallbackQuery):
+    await call.answer("✅ Запрос отмечен как выполненный!")
     if not await is_admin(call.from_user.id):
-        await call.answer("⛔ Нет доступа", show_alert=True)
         return
 
-    req_id = int(call.data.split(":")[1])
-    await database.update_script_request_status(req_id, "published")
-    await call.answer("✅ Запрос отмечен как выполненный!")
-    await callback_admin_script_requests(call)
+    try:
+        req_id = int(call.data.split(":")[1])
+        await database.update_script_request_status(req_id, "published")
+        await callback_admin_script_requests(call)
+    except Exception as e:
+        logger.error(f"Error in callback_req_done: {e}")
 
 
 @dp.callback_query(F.data.startswith("req_del:"))
 async def callback_req_del(call: CallbackQuery):
+    await call.answer("🗑 Запрос удалён")
     if not await is_admin(call.from_user.id):
-        await call.answer("⛔ Нет доступа", show_alert=True)
         return
 
-    req_id = int(call.data.split(":")[1])
-    await database.delete_script_request(req_id)
-    await call.answer("🗑 Запрос удалён")
-    await callback_admin_script_requests(call)
+    try:
+        req_id = int(call.data.split(":")[1])
+        await database.delete_script_request(req_id)
+        await callback_admin_script_requests(call)
+    except Exception as e:
+        logger.error(f"Error in callback_req_del: {e}")
 
 
 @dp.callback_query(F.data.startswith("req_search:"))
