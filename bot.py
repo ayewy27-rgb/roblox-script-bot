@@ -3,6 +3,7 @@ import asyncio
 import logging
 import sys
 import re
+import html
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Optional
@@ -322,73 +323,80 @@ async def handle_start(message: Message, command: CommandObject):
 
 @dp.callback_query(F.data.startswith("check_sub:"))
 async def handle_check_subscription(call: CallbackQuery):
-    user_id = call.from_user.id
-    target = call.data.split(":")[1]
-    channel = await database.get_setting("channel_id", config.CHANNEL_ID)
-    channel_clean = channel.replace("@", "") if channel else "script_drop"
-    channel_url = f"https://t.me/{channel_clean}"
-
-    is_sub = await check_user_subscription(user_id, channel)
-    if not is_sub:
-        await call.answer("❌ Вы ещё не подписались на канал! Пожалуйста, сначала подпишитесь на @" + channel_clean, show_alert=True)
-        return
-
-    await call.answer("✅ Подписка подтверждена!", show_alert=False)
     try:
-        await call.message.delete()
-    except Exception:
-        pass
+        user_id = call.from_user.id
+        target = call.data.split(":")[1]
+        channel = await database.get_setting("channel_id", config.CHANNEL_ID)
+        channel_clean = channel.replace("@", "") if channel else "script_drop"
+        channel_url = f"https://t.me/{channel_clean}"
 
-    if target == "welcome":
-        welcome_text = (
-            "👋 <b>Привет! Добро пожаловать в Script Drop! ⚡</b>\n\n"
-            "Здесь ты можешь получать актуальные и проверенные скрипты для Roblox.\n\n"
-            "📌 <i>Все свежие релизы публикуются в нашем канале. "
-            "Переходи, выбирай нужную игру и жми «Получить скрипт»!</i>"
-        )
-        buttons = []
-        app_url = get_webapp_url(user_id)
-        row1 = [InlineKeyboardButton(text="🚀 Перейти в канал", url=channel_url)]
-        if app_url:
-            row1.append(InlineKeyboardButton(text="📱 Открыть Приложение", web_app=WebAppInfo(url=app_url)))
-        buttons.append(row1)
-        if await is_admin(user_id):
-            buttons.append([InlineKeyboardButton(text="⚙️ Панель управления", callback_data="open_admin_panel")])
-        buttons.append([InlineKeyboardButton(text="💡 Предложить скрипт / игру", callback_data="user_suggest_script")])
-        reply_markup = InlineKeyboardMarkup(inline_keyboard=buttons)
-        
-        welcome_banner = getattr(config, "BANNER_WELCOME", None)
-        banner_file = welcome_banner if (welcome_banner and welcome_banner.exists()) else config.BANNER_PATH
-        if banner_file.exists():
-            photo = FSInputFile(banner_file)
-            await call.message.answer_photo(photo=photo, caption=welcome_text, reply_markup=reply_markup)
-        else:
-            await call.message.answer(welcome_text, reply_markup=reply_markup)
-        return
+        is_sub = await check_user_subscription(user_id, channel)
+        if not is_sub:
+            await call.answer("❌ Вы ещё не подписались на канал! Пожалуйста, сначала подпишитесь на @" + channel_clean, show_alert=True)
+            return
 
-    # Deliver script
-    script = await database.get_script(target)
-    if not script:
-        clean_target = target.lower().replace("_", " ").replace("-", " ")
-        recovered = await script_finder.search_scripts_online(clean_target)
-        if recovered:
-            best = recovered[0]
-            await database.add_script(
-                game_name=best["game_name"],
-                features=best["features"],
-                script_code=best["script_code"],
-                executors=post_builder.DEFAULT_EXECUTORS,
-                image_url=best.get("image_url"),
-                custom_key=target
+        await call.answer("✅ Подписка подтверждена!", show_alert=False)
+        try:
+            await call.message.delete()
+        except Exception:
+            pass
+
+        if target == "welcome":
+            welcome_text = (
+                "👋 <b>Привет! Добро пожаловать в Script Drop! ⚡</b>\n\n"
+                "Здесь ты можешь получать актуальные и проверенные скрипты для Roblox.\n\n"
+                "📌 <i>Все свежие релизы публикуются в нашем канале. "
+                "Переходи, выбирай нужную игру и жми «Получить скрипт»!</i>"
             )
-            script = await database.get_script(target)
+            buttons = []
+            app_url = get_webapp_url(user_id)
+            row1 = [InlineKeyboardButton(text="🚀 Перейти в канал", url=channel_url)]
+            if app_url:
+                row1.append(InlineKeyboardButton(text="📱 Открыть Приложение", web_app=WebAppInfo(url=app_url)))
+            buttons.append(row1)
+            if await is_admin(user_id):
+                buttons.append([InlineKeyboardButton(text="⚙️ Панель управления", callback_data="open_admin_panel")])
+            buttons.append([InlineKeyboardButton(text="💡 Предложить скрипт / игру", callback_data="user_suggest_script")])
+            reply_markup = InlineKeyboardMarkup(inline_keyboard=buttons)
+            
+            welcome_banner = getattr(config, "BANNER_WELCOME", None)
+            banner_file = welcome_banner if (welcome_banner and welcome_banner.exists()) else config.BANNER_PATH
+            if banner_file.exists():
+                photo = FSInputFile(banner_file)
+                await call.message.answer_photo(photo=photo, caption=welcome_text, reply_markup=reply_markup)
+            else:
+                await call.message.answer(welcome_text, reply_markup=reply_markup)
+            return
 
-    if not script:
-        await call.message.answer("⚠️ Скрипт обновляется или временно недоступен. Напишите боту название игры для поиска!")
-        return
+        # Deliver script
+        script = await database.get_script(target)
+        if not script:
+            clean_target = target.lower().replace("_", " ").replace("-", " ")
+            recovered = await script_finder.search_scripts_online(clean_target)
+            if recovered:
+                best = recovered[0]
+                await database.add_script(
+                    game_name=best["game_name"],
+                    features=best["features"],
+                    script_code=best["script_code"],
+                    executors=post_builder.DEFAULT_EXECUTORS,
+                    image_url=best.get("image_url"),
+                    custom_key=target
+                )
+                script = await database.get_script(target)
 
-    await database.record_user_received(user_id, target)
-    await deliver_script_to_user(call.message.chat.id, script, channel_url)
+        if not script:
+            await call.message.answer("⚠️ Скрипт обновляется или временно недоступен. Напишите боту название игры для поиска!")
+            return
+
+        await database.record_user_received(user_id, target)
+        await deliver_script_to_user(call.message.chat.id, script, channel_url)
+    except Exception as e:
+        logger.error(f"Error in handle_check_subscription: {e}")
+        try:
+            await call.answer("Произошла ошибка проверки подписки. Попробуйте еще раз.", show_alert=True)
+        except Exception:
+            pass
 
 
 
@@ -471,18 +479,18 @@ async def process_game_name(message: Message, state: FSMContext):
 
 @dp.callback_query(PostCreation.waiting_for_features, F.data == "use_ai_features")
 async def process_ai_features(call: CallbackQuery, state: FSMContext):
+    await call.answer("🤖 Функционал сгенерирован ИИ!")
     data = await state.get_data()
     game_name = data.get("game_name", "Roblox")
     ai_features = post_builder.generate_ai_features(game_name)
     await state.update_data(features=ai_features)
     await prompt_for_executors(call.message, state)
-    await call.answer("🤖 Функционал сгенерирован ИИ!")
 
 @dp.callback_query(PostCreation.waiting_for_features, F.data == "use_default_features")
 async def process_default_features(call: CallbackQuery, state: FSMContext):
+    await call.answer()
     await state.update_data(features=post_builder.DEFAULT_FEATURES)
     await prompt_for_executors(call.message, state)
-    await call.answer()
 
 
 @dp.message(PostCreation.waiting_for_features)
@@ -509,6 +517,7 @@ async def prompt_for_executors(message: Message, state: FSMContext):
 
 @dp.callback_query(PostCreation.waiting_for_executors, F.data.startswith("exec_"))
 async def process_executor_choice(call: CallbackQuery, state: FSMContext):
+    await call.answer()
     choice = call.data
     mapping = {
         "exec_all": "ПК и Мобильные (Delta, Arceus X, Fluxus, Codex, Solara)",
@@ -518,7 +527,10 @@ async def process_executor_choice(call: CallbackQuery, state: FSMContext):
     chosen_text = mapping.get(choice, post_builder.DEFAULT_EXECUTORS)
     await state.update_data(executors=chosen_text)
     await state.set_state(PostCreation.waiting_for_script)
-    await call.message.edit_reply_markup(reply_markup=None)
+    try:
+        await call.message.edit_reply_markup(reply_markup=None)
+    except Exception:
+        pass
 
     cancel_kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="❌ Отмена", callback_data="cancel_fsm")]])
     await call.message.answer(
@@ -527,7 +539,6 @@ async def process_executor_choice(call: CallbackQuery, state: FSMContext):
         "Отправьте команду запуска (loadstring) или ссылку:",
         reply_markup=cancel_kb,
     )
-    await call.answer()
 
 @dp.message(PostCreation.waiting_for_executors)
 async def process_custom_executors(message: Message, state: FSMContext):
@@ -708,9 +719,12 @@ async def list_scripts_handler(call: CallbackQuery):
 
 @dp.callback_query(F.data == "cancel_fsm")
 async def cancel_handler(call: CallbackQuery, state: FSMContext):
-    await state.clear()
-    await call.message.edit_text("❌ Действие отменено.")
     await call.answer()
+    await state.clear()
+    try:
+        await call.message.edit_text("❌ Действие отменено.")
+    except Exception:
+        pass
 
 
 # --- AUTO DELTA EXECUTOR (APK AUTO-UPDATER) ---
@@ -1375,6 +1389,8 @@ async def execute_post_changelog(call: CallbackQuery):
 @dp.message(Command("suggest"))
 async def start_user_script_suggest(event: types.TelegramObject, state: FSMContext):
     """Entry point for subscribers to suggest a Roblox game/script."""
+    if isinstance(event, CallbackQuery):
+        await event.answer()
     await state.set_state(UserScriptSuggest.waiting_for_game)
 
     suggest_banner = getattr(config, "BANNER_SUGGEST", None)
@@ -1396,7 +1412,6 @@ async def start_user_script_suggest(event: types.TelegramObject, state: FSMConte
     )
 
     if isinstance(event, CallbackQuery):
-        await event.answer()
         if banner_file and banner_file.exists():
             await event.message.answer_photo(photo=FSInputFile(banner_file), caption=text, reply_markup=cancel_kb)
         else:
@@ -1800,6 +1815,7 @@ async def handle_user_media(message: Message, state: FSMContext):
 @dp.callback_query(F.data.startswith("req_game:"))
 async def handle_request_game_callback(call: CallbackQuery):
     """Handles user game request button and alerts admin."""
+    await call.answer("✅ Запрос отправлен создателю канала! Скоро чит появится в боте.", show_alert=True)
     game_req = call.data.split(":", 1)[1]
     user = call.from_user
     user_mention = format_user_mention(user)
@@ -1815,7 +1831,6 @@ async def handle_request_game_callback(call: CallbackQuery):
         "⚡ <i>Перейдите в админ-панель -> «🔍 Найти скрипт», найдите рабочий чит и опубликуйте в канал!</i>"
     )
     await notify_primary_admin(admin_alert, reply_markup=alert_kb)
-    await call.answer("✅ Запрос отправлен создателю канала! Скоро чит появится в боте.", show_alert=True)
 
 
 # --- POLL ANSWER NOTIFIER ---
