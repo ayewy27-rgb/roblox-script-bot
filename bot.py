@@ -23,6 +23,9 @@ from aiogram.types import (
     CallbackQuery,
     Message,
     PollAnswer,
+    BotCommand,
+    BotCommandScopeDefault,
+    BotCommandScopeChat,
 )
 from aiogram.client.default import DefaultBotProperties
 import aiohttp
@@ -150,19 +153,21 @@ def get_admin_menu_keyboard() -> InlineKeyboardMarkup:
         ]
     )
 
-def build_script_delivery_keyboard(channel_url: str) -> InlineKeyboardMarkup:
-    buttons = [
-        [InlineKeyboardButton(text="📢 Наш канал со скриптами ↗", url=channel_url or "https://t.me/script_drop")],
-    ]
+def build_script_delivery_keyboard(script_code: str, channel_url: str) -> InlineKeyboardMarkup:
+    buttons = []
+    if script_code and script_code.strip():
+        buttons.append([InlineKeyboardButton(text="📋 Скопировать скрипт", copy_text=CopyTextButton(text=script_code.strip()))])
+    buttons.append([InlineKeyboardButton(text="📢 Наш канал со скриптами ↗", url=channel_url or "https://t.me/script_drop")])
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 async def deliver_script_to_user(chat_id: int, script: dict, channel_url: str):
-    """Delivers script to user exactly matching Screenshot 2 (banner + lua code + channel link)."""
+    """Delivers script to user with banner, lua code, copy button, and channel link."""
+    script_code = script.get("script_code", "")
     delivery_text = post_builder.build_user_delivery_message(
         game_name=script.get("game_name", "Roblox"),
-        script_code=script.get("script_code", "")
+        script_code=script_code
     )
-    delivery_kb = build_script_delivery_keyboard(channel_url)
+    delivery_kb = build_script_delivery_keyboard(script_code, channel_url)
     
     delivery_banner = getattr(config, "BANNER_DELIVERY", None)
     banner_to_use = delivery_banner if (delivery_banner and delivery_banner.exists()) else config.BANNER_PATH
@@ -1135,17 +1140,17 @@ async def callback_save_found(call: CallbackQuery):
 def build_changelog_preview_kb(current_style: str = "cyber") -> InlineKeyboardMarkup:
     """Builds interactive style switcher keyboard for changelog preview."""
     styles = [
-        ("cyber", "⚡ Кибер 1.1"),
-        ("hype", "🔥 Хайп 1.1"),
-        ("minimal", "💎 Простой 1.1"),
-        ("dev", "🛠 Разбор 1.1"),
+        ("cyber", "⚡ Кибер Хотфикс"),
+        ("hype", "🔥 Хайп Хотфикс"),
+        ("minimal", "💎 Простой Хотфикс"),
+        ("dev", "🛠 Разбор Хотфикс"),
     ]
     style_buttons = []
     for s_key, s_label in styles:
         label = f"✅ {s_label}" if s_key == current_style else s_label
         style_buttons.append(InlineKeyboardButton(text=label, callback_data=f"cl_style:{s_key}"))
 
-    active_name = dict(styles).get(current_style, "⚡ Кибер 1.1")
+    active_name = dict(styles).get(current_style, "⚡ Кибер Хотфикс")
 
     keyboard = [
         style_buttons,
@@ -1510,7 +1515,7 @@ async def publish_daily_poll(force: bool = False) -> bool:
             chat_id=channel,
             question=question,
             options=options,
-            is_anonymous=False,
+            is_anonymous=True,
             allows_multiple_answers=False,
         )
         await database.set_setting("last_daily_poll_date", today_str)
@@ -1663,6 +1668,23 @@ async def keep_alive_pinger():
             logger.debug(f"Keep-alive ping notice: {e}")
         await asyncio.sleep(480)
 
+async def setup_bot_commands(bot_instance: Bot):
+    """Sets up Telegram command menu: /start for regular users, /start and /admin for admin."""
+    try:
+        user_commands = [
+            BotCommand(command="start", description="🚀 Запустить бота / Меню")
+        ]
+        await bot_instance.set_my_commands(user_commands, scope=BotCommandScopeDefault())
+
+        admin_commands = [
+            BotCommand(command="start", description="🚀 Главное меню"),
+            BotCommand(command="admin", description="👑 Панель управления"),
+        ]
+        await bot_instance.set_my_commands(admin_commands, scope=BotCommandScopeChat(chat_id=5891418490))
+        logger.info("Bot commands configured successfully.")
+    except Exception as e:
+        logger.warning(f"Failed to setup bot commands: {e}")
+
 # --- MAIN ---
 
 async def main():
@@ -1688,6 +1710,7 @@ async def main():
     logger.info("Starting bot polling...")
     try:
         await bot.delete_webhook(drop_pending_updates=False)
+        await setup_bot_commands(bot)
         await dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())
     finally:
         autopost_task.cancel()
