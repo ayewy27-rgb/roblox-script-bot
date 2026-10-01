@@ -63,6 +63,9 @@ class DeltaUpload(StatesGroup):
 class AdminScriptSearch(StatesGroup):
     waiting_for_game_query = State()
 
+class UserScriptSuggest(StatesGroup):
+    waiting_for_game = State()
+
 # Initialize Bot and Dispatcher
 bot = Bot(
     token=config.BOT_TOKEN,
@@ -142,6 +145,7 @@ def get_webapp_url(user_id: int = 0) -> str:
 def get_admin_menu_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
+            [InlineKeyboardButton(text="💡 Предложения подписчиков и Статистика", callback_data="admin_script_requests")],
             [InlineKeyboardButton(text="🔍 Поиск скриптов по базам (PulseHub / Blox)", callback_data="admin_search_scripts")],
             [InlineKeyboardButton(text="➕ Создать пост со скриптом", callback_data="admin_create_post")],
             [InlineKeyboardButton(text="📱 Обновить Delta APK (Автодельта)", callback_data="admin_upload_delta")],
@@ -302,6 +306,7 @@ async def handle_start(message: Message, command: CommandObject):
     
     if is_user_admin:
         keyboard_buttons.append([InlineKeyboardButton(text="⚙️ Панель управления", callback_data="open_admin_panel")])
+    keyboard_buttons.append([InlineKeyboardButton(text="💡 Предложить скрипт / игру", callback_data="user_suggest_script")])
         
     reply_markup = InlineKeyboardMarkup(inline_keyboard=keyboard_buttons) if keyboard_buttons else None
 
@@ -349,6 +354,7 @@ async def handle_check_subscription(call: CallbackQuery):
         buttons.append(row1)
         if await is_admin(user_id):
             buttons.append([InlineKeyboardButton(text="⚙️ Панель управления", callback_data="open_admin_panel")])
+        buttons.append([InlineKeyboardButton(text="💡 Предложить скрипт / игру", callback_data="user_suggest_script")])
         reply_markup = InlineKeyboardMarkup(inline_keyboard=buttons)
         
         welcome_banner = getattr(config, "BANNER_WELCOME", None)
@@ -924,33 +930,11 @@ async def execute_post_header(call: CallbackQuery):
 # --- ADMIN SCRIPT SEARCH (PULSEHUB & SCRIPTBLOX SAFE FINDER) ---
 
 _SEARCH_CACHE = {}
+_SEARCH_REQ_MAP = {}
 
-@dp.callback_query(F.data == "admin_search_scripts")
-async def start_admin_search_scripts(call: CallbackQuery, state: FSMContext):
-    if not await is_admin(call.from_user.id):
-        await call.answer("⛔ Нет доступа", show_alert=True)
-        return
-
-    await state.set_state(AdminScriptSearch.waiting_for_game_query)
-    cancel_kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="❌ Отмена", callback_data="cancel_fsm")]])
-
-    await call.message.answer(
-        "🔍 <b>Поиск скриптов по открытым базам (PulseHub & ScriptBlox)</b>\n\n"
-        "Напишите название игры на английском или русском (например: <code>mm2</code>, <code>steal an egg</code>, <code>rivals</code>, <code>blade ball</code>, <code>blox fruits</code>):\n\n"
-        "🛡 <i>Все найденные скрипты автоматически проверяются на безопасность (блокируются вебхуки, стилеры и RAT).</i>",
-        reply_markup=cancel_kb,
-    )
-    await call.answer()
-
-@dp.message(AdminScriptSearch.waiting_for_game_query)
-async def process_admin_search_query(message: Message, state: FSMContext):
-    query = message.text.strip()
-    if not query:
-        await message.answer("⚠️ Пожалуйста, введите название текстом.")
-        return
-
-    status_msg = await message.answer(f"⏳ <b>Ищу проверенные скрипты для «{query}» в PulseHub и ScriptBlox...</b>")
-    
+async def perform_search_and_display(chat_id: int, user_id: int, query: str, send_target):
+    """Searches online for keyless scripts and presents results with publish/save actions."""
+    status_msg = await send_target.answer(f"⏳ <b>Ищу проверенные скрипты для «{html.escape(query)}» (строго БЕЗ КЛЮЧЕЙ)...</b>")
     results = await script_finder.search_scripts_online(query)
     try:
         await status_msg.delete()
@@ -960,21 +944,18 @@ async def process_admin_search_query(message: Message, state: FSMContext):
     if not results:
         cancel_kb = InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="🔍 Попробовать другой запрос", callback_data="admin_search_scripts")],
+            [InlineKeyboardButton(text="💡 К предложениям подписчиков", callback_data="admin_script_requests")],
             [InlineKeyboardButton(text="👑 В меню админа", callback_data="open_admin_panel")],
         ])
-        await message.answer(
-            f"❌ <b>По запросу «{query}» безопасных скриптов не найдено.</b>\n\n"
-            "Попробуйте написать другое название или добавьте скрипт вручную через «➕ Создать пост со скриптом».",
+        await send_target.answer(
+            f"❌ <b>По запросу «{html.escape(query)}» безопасных скриптов без ключей не найдено.</b>\n\n"
+            "Попробуйте уточнить название или проверьте базу вручную через «➕ Создать пост со скриптом».",
             reply_markup=cancel_kb,
         )
-        await state.clear()
         return
 
-    user_id = message.from_user.id
     _SEARCH_CACHE[user_id] = results
-    await state.clear()
-
-    await message.answer(f"🎉 <b>Найдено лучших проверенных скриптов: {len(results[:2])}</b>\nВыберите действие под любым из них:")
+    await send_target.answer(f"🎉 <b>Найдено проверенных скриптов БЕЗ КЛЮЧЕЙ: {len(results[:2])}</b>\nВыберите действие под любым из них:")
 
     import html as html_lib
     for idx, item in enumerate(results[:2]):
@@ -1005,13 +986,42 @@ async def process_admin_search_query(message: Message, state: FSMContext):
         sent_card = False
         if img_url and img_url.startswith("http"):
             try:
-                await message.answer_photo(photo=img_url, caption=card_text, reply_markup=card_kb)
+                await send_target.answer_photo(photo=img_url, caption=card_text, reply_markup=card_kb)
                 sent_card = True
             except Exception as pe:
                 logger.warning(f"Could not send card with photo {img_url}: {pe}")
 
         if not sent_card:
-            await message.answer(card_text, reply_markup=card_kb)
+            await send_target.answer(card_text, reply_markup=card_kb)
+
+
+@dp.callback_query(F.data == "admin_search_scripts")
+async def start_admin_search_scripts(call: CallbackQuery, state: FSMContext):
+    if not await is_admin(call.from_user.id):
+        await call.answer("⛔ Нет доступа", show_alert=True)
+        return
+
+    await state.set_state(AdminScriptSearch.waiting_for_game_query)
+    cancel_kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="❌ Отмена", callback_data="cancel_fsm")]])
+
+    await call.message.answer(
+        "🔍 <b>Поиск скриптов по открытым базам (PulseHub & ScriptBlox)</b>\n\n"
+        "Напишите название игры на английском или русском (например: <code>mm2</code>, <code>steal an egg</code>, <code>rivals</code>, <code>blade ball</code>, <code>blox fruits</code>):\n\n"
+        "🛡 <i>Все найденные скрипты автоматически проверяются на безопасность (блокируются вебхуки, стилеры и RAT).</i>",
+        reply_markup=cancel_kb,
+    )
+    await call.answer()
+
+
+@dp.message(AdminScriptSearch.waiting_for_game_query)
+async def process_admin_search_query(message: Message, state: FSMContext):
+    query = message.text.strip()
+    if not query:
+        await message.answer("⚠️ Пожалуйста, введите название текстом.")
+        return
+
+    await state.clear()
+    await perform_search_and_display(message.chat.id, message.from_user.id, query, message)
 
 
 @dp.callback_query(F.data.startswith("pub_found:"))
@@ -1077,12 +1087,22 @@ async def callback_publish_found(call: CallbackQuery):
                 sent = await bot.send_message(chat_id=channel, text=post_text, reply_markup=post_kb)
 
         await database.update_script_channel_post(script_key, sent.message_id)
+
+        # Update linked user request if search originated from suggestion
+        req_id = _SEARCH_REQ_MAP.pop(user_id, None)
+        if req_id:
+            try:
+                await database.update_script_request_status(req_id, "published")
+            except Exception as e:
+                logger.warning(f"Could not update status for request {req_id}: {e}")
+
         channel_clean = channel.replace("@", "")
         post_url = f"https://t.me/{channel_clean}/{sent.message_id}"
 
         confirm_kb = InlineKeyboardMarkup(
             inline_keyboard=[
                 [InlineKeyboardButton(text="🚀 Посмотреть пост в канале", url=post_url)],
+                [InlineKeyboardButton(text="💡 К предложениям подписчиков", callback_data="admin_script_requests")],
                 [InlineKeyboardButton(text="👑 В меню админа", callback_data="open_admin_panel")],
             ]
         )
@@ -1122,6 +1142,13 @@ async def callback_save_found(call: CallbackQuery):
         executors=post_builder.DEFAULT_EXECUTORS,
         image_url=item.get("image_url"),
     )
+
+    req_id = _SEARCH_REQ_MAP.pop(user_id, None)
+    if req_id:
+        try:
+            await database.update_script_request_status(req_id, "published")
+        except Exception as e:
+            logger.warning(f"Could not update status for request {req_id}: {e}")
 
     bot_info = await bot.get_me()
     bot_user = bot_info.username or config.BOT_USERNAME
@@ -1342,6 +1369,306 @@ async def execute_post_changelog(call: CallbackQuery):
         await call.answer("Ошибка")
 
 
+# --- USER SCRIPT SUGGESTION / REQUEST FLOW ---
+
+@dp.callback_query(F.data == "user_suggest_script")
+@dp.message(Command("suggest"))
+async def start_user_script_suggest(event: types.TelegramObject, state: FSMContext):
+    """Entry point for subscribers to suggest a Roblox game/script."""
+    await state.set_state(UserScriptSuggest.waiting_for_game)
+
+    suggest_banner = getattr(config, "BANNER_SUGGEST", None)
+    banner_file = suggest_banner if (suggest_banner and suggest_banner.exists()) else config.BANNER_PATH
+
+    cancel_kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="❌ Отмена / Главное меню", callback_data="cancel_user_suggest")]
+        ]
+    )
+
+    text = (
+        "💡 <b>Предложить игру или скрипт для канала!</b>\n"
+        "━━━━━━━━━━━━━━━━━━━━━\n"
+        "Ты нажал в опросе <b>«Другая (напиши боту)»</b> или хочешь чит для своей любимой игры?\n\n"
+        "✍️ <b>Напиши название игры прямо в ответ на это сообщение</b>\n"
+        "<i>(например: Fisch, Rivals, Blade Ball, Doors, Steal an Egg, BedWars)</i>:\n\n"
+        "Мы найдём проверенный скрипт <b>БЕЗ КЛЮЧЕЙ</b> и выложим готовый пост в канал!"
+    )
+
+    if isinstance(event, CallbackQuery):
+        await event.answer()
+        if banner_file and banner_file.exists():
+            await event.message.answer_photo(photo=FSInputFile(banner_file), caption=text, reply_markup=cancel_kb)
+        else:
+            await event.message.answer(text, reply_markup=cancel_kb)
+    elif isinstance(event, Message):
+        if banner_file and banner_file.exists():
+            await event.answer_photo(photo=FSInputFile(banner_file), caption=text, reply_markup=cancel_kb)
+        else:
+            await event.answer(text, reply_markup=cancel_kb)
+
+
+@dp.callback_query(F.data == "cancel_user_suggest")
+async def cancel_user_suggest(call: CallbackQuery, state: FSMContext):
+    await state.clear()
+    await call.answer("Отменено")
+    try:
+        await call.message.delete()
+    except Exception:
+        pass
+
+    user_id = call.from_user.id
+    channel = await database.get_setting("channel_id", config.CHANNEL_ID)
+    channel_clean = channel.replace("@", "") if channel else "script_drop"
+    channel_url = f"https://t.me/{channel_clean}"
+
+    welcome_text = (
+        "👋 <b>Главное меню Script Drop! ⚡</b>\n\n"
+        "Здесь ты можешь получать актуальные и проверенные скрипты для Roblox.\n\n"
+        "📌 <i>Все свежие релизы публикуются в нашем канале. "
+        "Переходи, выбирай нужную игру и жми «Получить скрипт»!</i>"
+    )
+
+    keyboard_buttons = []
+    row1 = []
+    if channel_url:
+        row1.append(InlineKeyboardButton(text="🚀 Перейти в канал", url=channel_url))
+    app_url = get_webapp_url(user_id)
+    if app_url:
+        row1.append(InlineKeyboardButton(text="📱 Открыть Приложение", web_app=WebAppInfo(url=app_url)))
+    if row1:
+        keyboard_buttons.append(row1)
+
+    if await is_admin(user_id):
+        keyboard_buttons.append([InlineKeyboardButton(text="⚙️ Панель управления", callback_data="open_admin_panel")])
+    keyboard_buttons.append([InlineKeyboardButton(text="💡 Предложить скрипт / игру", callback_data="user_suggest_script")])
+
+    welcome_banner = getattr(config, "BANNER_WELCOME", None)
+    banner_file = welcome_banner if (welcome_banner and welcome_banner.exists()) else config.BANNER_PATH
+    if banner_file and banner_file.exists():
+        await call.message.answer_photo(photo=FSInputFile(banner_file), caption=welcome_text, reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard_buttons))
+    else:
+        await call.message.answer(welcome_text, reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard_buttons))
+
+
+@dp.message(UserScriptSuggest.waiting_for_game)
+async def process_user_script_suggest(message: Message, state: FSMContext):
+    game_text = message.text.strip() if message.text else ""
+    if not game_text or game_text.startswith("/"):
+        await message.answer("⚠️ Пожалуйста, напишите название игры текстом.")
+        return
+
+    await state.clear()
+    user = message.from_user
+    user_id = user.id if user else 0
+    username = user.username if user else None
+    full_name = user.full_name if user else None
+
+    # Save into database
+    req_id = await database.add_script_request(
+        user_id=user_id,
+        username=username,
+        full_name=full_name,
+        game_name=game_text,
+        note="Через форму «💡 Предложить скрипт»"
+    )
+
+    channel = await database.get_setting("channel_id", config.CHANNEL_ID)
+    channel_clean = channel.replace("@", "") if channel else "script_drop"
+    channel_url = f"https://t.me/{channel_clean}"
+
+    # Confirm to subscriber
+    reply_kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text=f"📢 Перейти в канал @{channel_clean} ↗", url=channel_url)],
+            [InlineKeyboardButton(text="💡 Предложить ещё одну игру", callback_data="user_suggest_script")],
+        ]
+    )
+    await message.answer(
+        "🎉 <b>Спасибо! Твое предложение принято!</b>\n"
+        "━━━━━━━━━━━━━━━━━━━━━\n"
+        f"🎮 <b>Игра / Запрос:</b> «<b>{html.escape(game_text)}</b>»\n\n"
+        f"🚀 Создатель канала уже получил уведомление. Скоро проверенный скрипт <b>БЕЗ КЛЮЧЕЙ</b> появится в канале @{channel_clean}!",
+        reply_markup=reply_kb
+    )
+
+    # Notify primary admin
+    user_mention = format_user_mention(user)
+    user_link = get_user_chat_link(user)
+    admin_kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text=f"🔍 Найти скрипт «{game_text[:16]}»", callback_data=f"req_search:{req_id}")],
+            [
+                InlineKeyboardButton(text="✅ Выполнено", callback_data=f"req_done:{req_id}"),
+                InlineKeyboardButton(text="🗑 Удалить", callback_data=f"req_del:{req_id}")
+            ],
+            [InlineKeyboardButton(text="💬 Написать подписчику", url=user_link)]
+        ]
+    )
+    now_str = datetime.now(TZ_GMT5).strftime("%d.%m.%Y %H:%M")
+    admin_alert = (
+        f"💡 <b>Новое предложение скрипта от подписчика!</b> [#{req_id}]\n"
+        "━━━━━━━━━━━━━━━━━━━━━\n"
+        f"👤 <b>От кого:</b> {user_mention} (<code>{user_id}</code>)\n"
+        f"🎮 <b>Игра / Запрос:</b> «<b>{html.escape(game_text)}</b>»\n"
+        f"🕒 <b>Время (GMT+5):</b> {now_str}\n\n"
+        "⚡ <i>Нажмите кнопку ниже, чтобы бот моментально нашёл скрипты без ключей и подготовил пост!</i>"
+    )
+    asyncio.create_task(notify_primary_admin(admin_alert, reply_markup=admin_kb))
+
+
+# --- ADMIN SCRIPT REQUESTS & SUGGESTION STATS ---
+
+@dp.callback_query(F.data == "admin_script_requests")
+async def callback_admin_script_requests(call: CallbackQuery):
+    if not await is_admin(call.from_user.id):
+        await call.answer("⛔ Нет доступа", show_alert=True)
+        return
+
+    stats = await database.get_script_request_stats()
+    pending = await database.get_script_requests(status="pending", limit=6)
+
+    # Top games list
+    top_games = stats.get("top_games", [])
+    if top_games:
+        top_lines = []
+        for i, tg in enumerate(top_games[:5], 1):
+            top_lines.append(f"{i}. 🎮 <b>{html.escape(tg['game'])}</b> — <b>{tg['count']}</b> запрос(ов)")
+        top_text = "\n".join(top_lines)
+    else:
+        top_text = "<i>Запросов пока нет</i>"
+
+    # Pending list
+    if pending:
+        req_lines = []
+        for r in pending:
+            u_name = f"@{r['username']}" if r.get('username') else f"ID {r['user_id']}"
+            req_lines.append(f"• #{r['id']} 🎮 <b>{html.escape(r['game_name'])}</b> (от {u_name})")
+        pending_text = "\n".join(req_lines)
+    else:
+        pending_text = "<i>Все запросы обработаны! Новых пока нет 🎉</i>"
+
+    text = (
+        "💡 <b>Предложения подписчиков & Статистика запросов</b>\n"
+        "━━━━━━━━━━━━━━━━━━━━━\n"
+        "📊 <b>Общая статистика:</b>\n"
+        f"• 📩 Всего предложений: <b>{stats['total']}</b>\n"
+        f"• ⏳ Ожидают скрипта: <b>{stats['pending']}</b>\n"
+        f"• ✅ Опубликовано / Закрыто: <b>{stats['published']}</b>\n"
+        f"• 👥 Уникальных подписчиков: <b>{stats['unique_users']}</b>\n\n"
+        "🔥 <b>Топ запрашиваемых игр подписчиками:</b>\n"
+        f"{top_text}\n\n"
+        "📋 <b>Свежие запросы (ждут скрипта):</b>\n"
+        f"{pending_text}\n"
+        "━━━━━━━━━━━━━━━━━━━━━\n"
+        "<i>Нажмите на кнопку с игрой ниже, чтобы моментально найти чит без ключей:</i>"
+    )
+
+    buttons = []
+    for r in pending:
+        short_name = r['game_name'][:18]
+        buttons.append([
+            InlineKeyboardButton(text=f"🔍 {short_name}", callback_data=f"req_search:{r['id']}"),
+            InlineKeyboardButton(text="✅", callback_data=f"req_done:{r['id']}"),
+            InlineKeyboardButton(text="🗑", callback_data=f"req_del:{r['id']}"),
+        ])
+
+    buttons.append([
+        InlineKeyboardButton(text="📋 История выполненных", callback_data="admin_req_history"),
+        InlineKeyboardButton(text="🔄 Обновить", callback_data="admin_script_requests"),
+    ])
+    buttons.append([InlineKeyboardButton(text="👑 В меню админа", callback_data="open_admin_panel")])
+
+    kb = InlineKeyboardMarkup(inline_keyboard=buttons)
+    try:
+        await call.message.edit_text(text, reply_markup=kb)
+    except Exception:
+        await call.message.answer(text, reply_markup=kb)
+    await call.answer()
+
+
+@dp.callback_query(F.data == "admin_req_history")
+async def callback_admin_req_history(call: CallbackQuery):
+    if not await is_admin(call.from_user.id):
+        await call.answer("⛔ Нет доступа", show_alert=True)
+        return
+
+    history = await database.get_script_requests(status="published", limit=10)
+    if not history:
+        history_text = "<i>История пуста — ещё ни один запрос не был отмечен как выполненный.</i>"
+    else:
+        lines = []
+        for r in history:
+            u_name = f"@{r['username']}" if r.get('username') else f"ID {r['user_id']}"
+            lines.append(f"• #{r['id']} 🎮 <b>{html.escape(r['game_name'])}</b> (от {u_name}) — ✅")
+        history_text = "\n".join(lines)
+
+    text = (
+        "📋 <b>История выполненных предложений:</b>\n"
+        "━━━━━━━━━━━━━━━━━━━━━\n"
+        f"{history_text}\n"
+    )
+
+    kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="🔙 Назад к статистике", callback_data="admin_script_requests")],
+            [InlineKeyboardButton(text="👑 В меню админа", callback_data="open_admin_panel")],
+        ]
+    )
+    try:
+        await call.message.edit_text(text, reply_markup=kb)
+    except Exception:
+        await call.message.answer(text, reply_markup=kb)
+    await call.answer()
+
+
+@dp.callback_query(F.data.startswith("req_done:"))
+async def callback_req_done(call: CallbackQuery):
+    if not await is_admin(call.from_user.id):
+        await call.answer("⛔ Нет доступа", show_alert=True)
+        return
+
+    req_id = int(call.data.split(":")[1])
+    await database.update_script_request_status(req_id, "published")
+    await call.answer("✅ Запрос отмечен как выполненный!")
+    await callback_admin_script_requests(call)
+
+
+@dp.callback_query(F.data.startswith("req_del:"))
+async def callback_req_del(call: CallbackQuery):
+    if not await is_admin(call.from_user.id):
+        await call.answer("⛔ Нет доступа", show_alert=True)
+        return
+
+    req_id = int(call.data.split(":")[1])
+    await database.delete_script_request(req_id)
+    await call.answer("🗑 Запрос удалён")
+    await callback_admin_script_requests(call)
+
+
+@dp.callback_query(F.data.startswith("req_search:"))
+async def callback_req_search(call: CallbackQuery):
+    if not await is_admin(call.from_user.id):
+        await call.answer("⛔ Нет доступа", show_alert=True)
+        return
+
+    req_id = int(call.data.split(":")[1])
+    req = await database.get_script_request(req_id)
+    if not req:
+        await call.answer("⚠️ Запрос не найден или удалён.", show_alert=True)
+        return
+
+    game_query = req["game_name"]
+    await call.answer(f"🔍 Ищу скрипты для «{game_query}»...")
+    _SEARCH_REQ_MAP[call.from_user.id] = req_id
+    await perform_search_and_display(
+        chat_id=call.message.chat.id,
+        user_id=call.from_user.id,
+        query=game_query,
+        send_target=call.message
+    )
+
+
 # --- USER / ADMIN TEXT MESSAGE HANDLER ---
 
 @dp.message(F.text)
@@ -1363,37 +1690,55 @@ async def handle_user_text_message(message: Message, state: FSMContext):
     # 1. ADMIN ONLY: Search engine for the creator to quickly find & drop scripts
     if is_user_admin:
         await state.set_state(AdminScriptSearch.waiting_for_game_query)
-        await process_admin_search_query(message, state)
+        await perform_search_and_display(message.chat.id, user_id, text, message)
         return
 
-    # 2. SUBSCRIBERS: Ready scripts are published in channel; forward request to admin
+    # 2. SUBSCRIBERS: Ready scripts are published in channel; save suggestion & forward to admin
+    req_id = await database.add_script_request(
+        user_id=user_id,
+        username=message.from_user.username if message.from_user else None,
+        full_name=message.from_user.full_name if message.from_user else None,
+        game_name=text,
+        note="Сообщение напрямую в чат бота"
+    )
+
     user_mention = format_user_mention(message.from_user)
     user_link = get_user_chat_link(message.from_user)
     alert_kb = InlineKeyboardMarkup(
-        inline_keyboard=[[InlineKeyboardButton(text="💬 Написать подписчику", url=user_link)]]
+        inline_keyboard=[
+            [InlineKeyboardButton(text=f"🔍 Найти скрипт для «{text[:16]}»", callback_data=f"req_search:{req_id}")],
+            [
+                InlineKeyboardButton(text="✅ Выполнено", callback_data=f"req_done:{req_id}"),
+                InlineKeyboardButton(text="🗑 Удалить", callback_data=f"req_del:{req_id}")
+            ],
+            [InlineKeyboardButton(text="💬 Написать подписчику", url=user_link)]
+        ]
     )
+    now_str = datetime.now(TZ_GMT5).strftime("%d.%m.%Y %H:%M")
     admin_alert = (
-        "📩 <b>Подписчик написал в бот / запросил игру:</b>\n"
+        f"📩 <b>Подписчик написал в бот / предложил игру!</b> [#{req_id}]\n"
         "━━━━━━━━━━━━━━━━━━━━━\n"
         f"👤 <b>От кого:</b> {user_mention} (<code>{user_id}</code>)\n"
-        f"🎮 <b>Сообщение/игра:</b> «<code>{html.escape(text)}</code>»\n\n"
-        "⚡ <i>Вы можете найти чит в админке («🔍 Поиск скриптов») и выложить готовый пост в канал!</i>"
+        f"🎮 <b>Сообщение/игра:</b> «<code>{html.escape(text)}</code>»\n"
+        f"🕒 <b>Время (GMT+5):</b> {now_str}\n\n"
+        "⚡ <i>Нажмите «🔍 Найти скрипт», чтобы бот моментально подобрал чит без ключей и подготовил пост!</i>"
     )
     asyncio.create_task(notify_primary_admin(admin_alert, reply_markup=alert_kb))
 
     kb = InlineKeyboardMarkup(
         inline_keyboard=[
             [InlineKeyboardButton(text=f"📢 Перейти в канал @{channel_clean} ↗", url=channel_url)],
+            [InlineKeyboardButton(text="💡 Предложить ещё одну игру", callback_data="user_suggest_script")],
         ]
     )
     await message.answer(
-        "👋 <b>Все готовые и проверенные скрипты публикуются в нашем канале!</b>\n\n"
-        "📌 <b>Как получить рабочий скрипт:</b>\n"
-        f"1️⃣ Перейдите в наш канал <b>@{channel_clean}</b>\n"
-        "2️⃣ Найдите пост с нужной игрой в ленте\n"
-        "3️⃣ Нажмите кнопку <b>«🚀 Получить скрипт»</b> под постом — и бот моментально выдаст готовый код без рекламы и вирусов!\n\n"
-        f"🎮 <i>Ваш запрос на «<b>{html.escape(text)}</b>» передан админу. Скоро проверенный чит появится в канале!</i>\n\n"
-        "📊 <i>Также вы можете голосовать за любимую игру в ежедневном опросе в канале (каждый день в 12:00)!</i>",
+        "👋 <b>Спасибо! Ваш запрос на игру принят и передан создателю канала!</b>\n\n"
+        f"🎮 <b>Игра:</b> «<b>{html.escape(text)}</b>»\n\n"
+        "📌 <b>Как устроен Script Drop:</b>\n"
+        f"1️⃣ Мы ищем для вас лучший рабочий скрипт <b>строго без ключей</b> и вирусов.\n"
+        f"2️⃣ Пост со скриптом появится в нашем канале <b>@{channel_clean}</b>.\n"
+        f"3️⃣ В посте вы нажмёте <b>«🚀 Получить скрипт»</b> и бот моментально выдаст готовый код!\n\n"
+        "📊 <i>Также вы можете голосовать за любимую игру в ежедневных опросах в канале!</i>",
         reply_markup=kb,
     )
 
@@ -1672,12 +2017,14 @@ async def setup_bot_commands(bot_instance: Bot):
     """Sets up Telegram command menu: /start for regular users, /start and /admin for admin."""
     try:
         user_commands = [
-            BotCommand(command="start", description="🚀 Запустить бота / Меню")
+            BotCommand(command="start", description="🚀 Запустить бота / Меню"),
+            BotCommand(command="suggest", description="💡 Предложить скрипт / игру"),
         ]
         await bot_instance.set_my_commands(user_commands, scope=BotCommandScopeDefault())
 
         admin_commands = [
             BotCommand(command="start", description="🚀 Главное меню"),
+            BotCommand(command="suggest", description="💡 Предложить скрипт / игру"),
             BotCommand(command="admin", description="👑 Панель управления"),
         ]
         await bot_instance.set_my_commands(admin_commands, scope=BotCommandScopeChat(chat_id=5891418490))

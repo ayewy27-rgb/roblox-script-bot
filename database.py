@@ -59,6 +59,18 @@ async def init_db():
                 value TEXT NOT NULL
             )
         """)
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS script_requests (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                username TEXT,
+                full_name TEXT,
+                game_name TEXT NOT NULL,
+                note TEXT DEFAULT '',
+                status TEXT DEFAULT 'pending',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
         
         # Check if columns exist in older table
         async with db.execute("PRAGMA table_info(scripts)") as cursor:
@@ -344,3 +356,106 @@ async def set_setting(key: str, value: str):
             (key, str(value))
         )
         await db.commit()
+
+
+# --- SCRIPT REQUESTS (SUGGESTIONS FROM USERS) ---
+
+async def add_script_request(
+    user_id: int,
+    username: Optional[str],
+    full_name: Optional[str],
+    game_name: str,
+    note: str = ""
+) -> int:
+    """Saves a script/game suggestion from a user. Returns the request ID."""
+    clean_game = game_name.strip()
+    clean_note = note.strip()
+    async with aiosqlite.connect(DB_PATH) as db:
+        cursor = await db.execute("""
+            INSERT INTO script_requests (user_id, username, full_name, game_name, note, status)
+            VALUES (?, ?, ?, ?, ?, 'pending')
+        """, (user_id, username or "", full_name or "", clean_game, clean_note))
+        await db.commit()
+        return cursor.lastrowid
+
+async def get_script_requests(status: Optional[str] = None, limit: int = 50, offset: int = 0) -> List[Dict[str, Any]]:
+    """Fetches script requests, optionally filtered by status ('pending', 'published', 'rejected')."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        if status:
+            query = "SELECT * FROM script_requests WHERE status = ? ORDER BY id DESC LIMIT ? OFFSET ?"
+            params = (status, limit, offset)
+        else:
+            query = "SELECT * FROM script_requests ORDER BY id DESC LIMIT ? OFFSET ?"
+            params = (limit, offset)
+        async with db.execute(query, params) as cursor:
+            rows = await cursor.fetchall()
+            return [dict(r) for r in rows]
+
+async def get_script_request(request_id: int) -> Optional[Dict[str, Any]]:
+    """Gets a specific script request by ID."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute("SELECT * FROM script_requests WHERE id = ?", (request_id,)) as cursor:
+            row = await cursor.fetchone()
+            return dict(row) if row else None
+
+async def update_script_request_status(request_id: int, status: str):
+    """Updates request status (e.g. 'published', 'rejected', 'pending')."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            "UPDATE script_requests SET status = ? WHERE id = ?",
+            (status, request_id)
+        )
+        await db.commit()
+
+async def delete_script_request(request_id: int):
+    """Deletes a request completely."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("DELETE FROM script_requests WHERE id = ?", (request_id,))
+        await db.commit()
+
+async def get_script_request_stats() -> Dict[str, Any]:
+    """Returns aggregated statistics of user script requests."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+
+        # Total count
+        async with db.execute("SELECT COUNT(*) FROM script_requests") as cur:
+            row = await cur.fetchone()
+            total = row[0] if row else 0
+
+        # Pending count
+        async with db.execute("SELECT COUNT(*) FROM script_requests WHERE status = 'pending'") as cur:
+            row = await cur.fetchone()
+            pending = row[0] if row else 0
+
+        # Published count
+        async with db.execute("SELECT COUNT(*) FROM script_requests WHERE status = 'published'") as cur:
+            row = await cur.fetchone()
+            published = row[0] if row else 0
+
+        # Unique users count
+        async with db.execute("SELECT COUNT(DISTINCT user_id) FROM script_requests") as cur:
+            row = await cur.fetchone()
+            unique_users = row[0] if row else 0
+
+        # Top requested games
+        async with db.execute("""
+            SELECT TRIM(game_name) as g_name, COUNT(*) as cnt
+            FROM script_requests
+            GROUP BY LOWER(TRIM(game_name))
+            ORDER BY cnt DESC
+            LIMIT 10
+        """) as cur:
+            rows = await cur.fetchall()
+            top_games = [{"game": r["g_name"], "count": r["cnt"]} for r in rows]
+
+        return {
+            "total": total,
+            "pending": pending,
+            "published": published,
+            "unique_users": unique_users,
+            "top_games": top_games,
+        }
+
