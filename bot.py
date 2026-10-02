@@ -166,18 +166,42 @@ def build_script_delivery_keyboard(script_code: str, channel_url: str) -> Inline
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 async def deliver_script_to_user(chat_id: int, script: dict, channel_url: str):
-    """Delivers script to user with banner, lua code, copy button, and channel link."""
+    """Delivers script to user with visual loading step, banner, lua code, copy button, and channel link."""
     script_code = script.get("script_code", "")
+    game_title = script.get("game_name", "Roblox")
+
+    # 1. Interactive visual loading step
+    loading_banner = getattr(config, "BANNER_LAPIS_CLEAN", None) or getattr(config, "BANNER_DELIVERY", None) or config.BANNER_PATH
+    loading_msg = None
+    if loading_banner and loading_banner.exists():
+        try:
+            loading_msg = await bot.send_photo(
+                chat_id=chat_id,
+                photo=FSInputFile(loading_banner),
+                caption=f"⚡ <b>Загрузка скрипта для «{game_title}»...</b>\n\n⏳ <i>Проверяем актуальность версии и отсутствие ключей (100% Keyless)...</i>"
+            )
+        except Exception:
+            pass
+
+    if loading_msg:
+        await asyncio.sleep(0.9)
+        try:
+            await loading_msg.delete()
+        except Exception:
+            pass
+
+    # 2. Deliver actual script
     delivery_text = post_builder.build_user_delivery_message(
-        game_name=script.get("game_name", "Roblox"),
+        game_name=game_title,
         script_code=script_code
     )
     delivery_kb = build_script_delivery_keyboard(script_code, channel_url)
     
     delivery_banner = getattr(config, "BANNER_DELIVERY", None)
-    banner_to_use = delivery_banner if (delivery_banner and delivery_banner.exists()) else config.BANNER_PATH
+    lapis_banner = getattr(config, "BANNER_LAPIS_CLEAN", None) or getattr(config, "BANNER_LAPIS", None)
+    banner_to_use = delivery_banner if (delivery_banner and delivery_banner.exists()) else lapis_banner or config.BANNER_PATH
     
-    if banner_to_use.exists():
+    if banner_to_use and banner_to_use.exists():
         photo = FSInputFile(banner_to_use)
         await bot.send_photo(
             chat_id=chat_id,
@@ -253,12 +277,18 @@ async def handle_start(message: Message, command: CommandObject):
                     [InlineKeyboardButton(text="🔄 Проверить подписку", callback_data=f"check_sub:{script_key}")],
                 ]
             )
-            await message.answer(
-                "🔒 <b>Для получения скрипта необходимо подписаться на наш канал:</b>\n\n"
-                f"📢 Канал: <b>@{channel_clean}</b>\n\n"
-                "После подписки нажмите кнопку <b>«Проверить подписку»</b> 👇",
-                reply_markup=sub_kb,
+            sub_text = (
+                "🔒 <b>ДОСТУП ОГРАНИЧЕН!</b>\n"
+                "━━━━━━━━━━━━━━━━━━━━━\n"
+                f"Чтобы получить скрипт, необходимо подписаться на наш канал:\n"
+                f"📢 <b>@{channel_clean}</b>\n\n"
+                "⚡ <i>После подписки нажмите кнопку «Проверить подписку» ниже — и бот моментально выдаст вам чит!</i>"
             )
+            sub_banner = getattr(config, "BANNER_SUB_RED", None)
+            if sub_banner and sub_banner.exists():
+                await message.answer_photo(photo=FSInputFile(sub_banner), caption=sub_text, reply_markup=sub_kb)
+            else:
+                await message.answer(sub_text, reply_markup=sub_kb)
             return
 
         # Record user received this script in history
@@ -279,13 +309,18 @@ async def handle_start(message: Message, command: CommandObject):
                 [InlineKeyboardButton(text="🔄 Проверить подписку", callback_data="check_sub:welcome")],
             ]
         )
-        await message.answer(
-            "🔒 <b>Добро пожаловать в Script Drop! ⚡</b>\n\n"
-            "Чтобы пользоваться ботом и открывать скрипты, подпишитесь на наш канал:\n"
+        sub_text = (
+            "🔒 <b>ДОБРО ПОЖАЛОВАТЬ В SCRIPT DROP!</b>\n"
+            "━━━━━━━━━━━━━━━━━━━━━\n"
+            f"Чтобы пользоваться ботом и получать скрипты без ключей, подпишитесь на наш канал:\n"
             f"📢 <b>@{channel_clean}</b>\n\n"
-            "После подписки нажмите кнопку ниже 👇",
-            reply_markup=sub_kb,
+            "⚡ <i>После подписки нажмите кнопку «Проверить подписку» ниже!</i>"
         )
+        sub_banner = getattr(config, "BANNER_SUB_RED", None)
+        if sub_banner and sub_banner.exists():
+            await message.answer_photo(photo=FSInputFile(sub_banner), caption=sub_text, reply_markup=sub_kb)
+        else:
+            await message.answer(sub_text, reply_markup=sub_kb)
         return
 
     welcome_text = (
@@ -1006,6 +1041,15 @@ async def perform_search_and_display(chat_id: int, user_id: int, query: str, sen
                 logger.warning(f"Could not send card with photo {img_url}: {pe}")
 
         if not sent_card:
+            fallback_banner = getattr(config, "BANNER_LAPIS_CLEAN", None) or getattr(config, "BANNER_LAPIS", None) or config.BANNER_PATH
+            if fallback_banner and fallback_banner.exists():
+                try:
+                    await send_target.answer_photo(photo=FSInputFile(fallback_banner), caption=card_text, reply_markup=card_kb)
+                    sent_card = True
+                except Exception as fe:
+                    logger.warning(f"Could not send card with fallback banner: {fe}")
+
+        if not sent_card:
             await send_target.answer(card_text, reply_markup=card_kb)
 
 
@@ -1094,8 +1138,9 @@ async def callback_publish_found(call: CallbackQuery):
                 logger.warning(f"Could not send photo {photo_url} to channel: {pe}")
 
         if not sent:
-            if config.BANNER_PATH.exists():
-                photo = FSInputFile(config.BANNER_PATH)
+            fallback_banner = getattr(config, "BANNER_LAPIS_CLEAN", None) or getattr(config, "BANNER_LAPIS", None) or config.BANNER_PATH
+            if fallback_banner and fallback_banner.exists():
+                photo = FSInputFile(fallback_banner)
                 sent = await bot.send_photo(chat_id=channel, photo=photo, caption=post_text, reply_markup=post_kb)
             else:
                 sent = await bot.send_message(chat_id=channel, text=post_text, reply_markup=post_kb)

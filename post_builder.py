@@ -146,17 +146,122 @@ KNOWN_GAMES_FEATURES = {
     ),
     "99 nights in the forest": (
         "• ESP (ВХ на монстров, выживших, лагерь и лут)\n"
-        "• Unlimited Health / Godmode (Бессмертие и защита от урона)\n"
+        "• Unlimited Health / Godmode (Бессмертие и защита от любого урона)\n"
         "• Infinite Saplings & Auto Farm (Бесконечные саженцы и авто-фарм)\n"
         "• Auto Eat & Food Selection (Авто-еда и выбор припасов)\n"
         "• Fly, Noclip, Speed & Teleport (Полёт сквозь стены и быстрый ТП)"
     ),
     "99 ночей": (
         "• ESP (ВХ на монстров, выживших, лагерь и лут)\n"
-        "• Unlimited Health / Godmode (Бессмертие и защита от урона)\n"
+        "• Unlimited Health / Godmode (Бессмертие и защита от любого урона)\n"
         "• Infinite Saplings & Auto Farm (Бесконечные саженцы и авто-фарм)\n"
         "• Auto Eat & Food Selection (Авто-еда и выбор припасов)\n"
         "• Fly, Noclip, Speed & Teleport (Полёт сквозь стены и быстрый ТП)"
+    ),
+    "the strongest battlegrounds": (
+        "• Auto Combo & Skill Spam (Авто-комбо способностей без задержки)\n"
+        "• Auto Block & Counter (Идеальное блокирование ударов)\n"
+        "• Teleport Behind Target (Мгновенный телепорт за спину врага)\n"
+        "• Infinite Awakening / Ult (Бесконечный режим пробуждения)\n"
+        "• ESP Players & HP Bar (Подсветка здоровья и энергии игроков)"
+    ),
+    "tsb": (
+        "• Auto Combo & Skill Spam (Авто-комбо способностей без задержки)\n"
+        "• Auto Block & Counter (Идеальное блокирование ударов)\n"
+        "• Teleport Behind Target (Мгновенный телепорт за спину врага)\n"
+        "• Infinite Awakening / Ult (Бесконечный режим пробуждения)\n"
+        "• ESP Players & HP Bar (Подсветка здоровья и энергии игроков)"
+    ),
+    "arsenal": (
+        "• Silent Aim (Скрытый аимбот в голову сквозь преграды)\n"
+        "• Box & Skeleton ESP (Полный ВХ на всех врагов)\n"
+        "• Instant Kill & Rapid Fire (Мгновенный выстрел без отдачи)\n"
+        "• Infinite Ammo (Бесконечные патроны)\n"
+        "• Speed & BunnyHop (Быстрое перемещение и распрыжка)"
+    ),
+    "counter blox": (
+        "• Silent Aim (Скрытая авто-наводка в голову)\n"
+        "• Wallbang & Penetration (Прострел любых стен)\n"
+        "• Skin Changer (Все скины на оружие и ножи бесплатно)\n"
+        "• 2D Box & Skeleton ESP (ВХ на всех противников)\n"
+        "• No Recoil & Rapid Fire (Стрельба без отдачи)"
+    ),
+    "evade": (
+        "• Bot & Nextbot ESP (Отображение ботов и дистанции до них)\n"
+        "• Auto Revive Teammates (Мгновенное поднятие союзников)\n"
+        "• Auto Drink Cola / Speed (Бесконечное ускорение и распрыжка)\n"
+        "• Godmode against Bots (Защита от урона некстботов)\n"
+        "• Teleport to Safe Zone (Быстрый ТП в безопасную зону)"
+    ),
+    "slap battles": (
+        "• Slap Aura 360° (Авто-пощечины всем вокруг без промаха)\n"
+        "• Anti-Void (Защита от падения в пустоту)\n"
+        "• Godmode / Safe Island (Неуязвимость от чужих перчаток)\n"
+        "• Glove & Badge Auto Farm (Автоматическое открытие перчаток)\n"
+        "• Speed & Infinite Jump (Быстрое перемещение)"
+    ),
+    "bee swarm simulator": (
+        "• Auto Field & Pollen Farm (Авто-сбор пыльцы на лучших полях)\n"
+        "• Auto Convert Honey (Автоматическая переработка мёда в улье)\n"
+        "• Auto Kill Monsters & Bosses (Авто-убийство жуков и боссов)\n"
+        "• Speed & Infinite Jump (Мгновенное передвижение)\n"
+        "• Token & Treat Sniper (Авто-подбор всех токенов)"
+    ),
+    "tower of hell": (
+        "• Instant Win / Teleport to Top (Мгновенный телепорт на вершину башни)\n"
+        "• Godmode / Anti-Laser (Защита от лазеров и смертельных зон)\n"
+        "• Fly & Infinite Jump (Свободный полёт и прыжки в воздухе)\n"
+        "• Remove Killparts (Полное удаление опасных блоков)\n"
+        "• Free Items / Unlock All (Разблокировка всех эффектов)"
+    ),
+    "build a boat for treasure": (
+        "• Instant Win / Treasure TP (Мгновенная победа и фарм золота)\n"
+        "• Auto Buy Chests (Авто-покупка сундуков с деталями)\n"
+        "• Fly & Noclip Mode (Полёт по всей карте сквозь препятствия)\n"
+        "• Infinite Blocks Glitch (Бесконечные материалы)\n"
+        "• Godmode (Полная неуязвимость лодки и персонажа)"
+    ),
+    "muscle legends": (
+        "• Auto Strength (Мгновенный авто-клик и кач силы)\n"
+        "• Auto Rebirth (Автоматическое перерождение)\n"
+        "• Auto Brawl / Kill All (Авто-атака всех игроков на арене)\n"
+        "• Fast Punch (Удар без задержки)\n"
+        "• Gem & Pet Auto Farm (Авто-фарм кристаллов и лучших питомцев)"
+    ),
+    "dandy's world": (
+        "• Auto Complete Machines (Мгновенная починка машин)\n"
+        "• Twisteds / Monster ESP (ВХ на монстров и дистанцию)\n"
+        "• Infinite Stamina (Бесконечный бег без усталости)\n"
+        "• Item & Capsule ESP (Подсветка капсул и предметов)\n"
+        "• Speed Boost & Safe TP (Увеличенная скорость и безопасный ТП)"
+    ),
+    "pressure": (
+        "• Entity & Monster Alert (Предупреждение о появлении монстров)\n"
+        "• Keycard & Door ESP (Подсветка карточек доступа и проходов)\n"
+        "• Fullbright & No Fog (Яркое подводное освещение без тумана)\n"
+        "• Auto Unlock / Fast Interaction (Мгновенное открытие дверей)\n"
+        "• Speed & Infinite Breath (Ускорение и бесконечный кислород)"
+    ),
+    "survive the killer": (
+        "• Killer & Survivor ESP (Подсветка маньяка и игроков)\n"
+        "• Auto Revive & Fast Escape (Мгновенное спасение и выход)\n"
+        "• Speed & Fly (Высокая скорость передвижения)\n"
+        "• Auto Loot Chests (Авто-сбор всех сундуков на карте)\n"
+        "• Godmode / Invisibility (Невидимость для убийцы)"
+    ),
+    "bloxstrike": (
+        "• Silent Aim (Скрытая авто-наводка в голову)\n"
+        "• Wallbang (Прострел любых стен и укрытий)\n"
+        "• Skin Changer (Все скины на оружие и ножи бесплатно)\n"
+        "• 2D Box & Skeleton ESP (ВХ на всех противников)\n"
+        "• No Recoil & Rapid Fire (Стрельба без отдачи)"
+    ),
+    "san diego": (
+        "• Smuggle Autofarm (Авто-фарм контрабанды)\n"
+        "• Truck & Boat Autofarm (Авто-фарм на грузовиках и лодках)\n"
+        "• Police Auto-Detect & ESP (Оповещение о полиции и ВХ)\n"
+        "• Speed & Fly (Увеличенная скорость транспорта)\n"
+        "• Infinite Fuel & Nitro (Бесконечное топливо)"
     ),
 }
 
