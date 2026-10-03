@@ -166,40 +166,18 @@ def build_script_delivery_keyboard(script_code: str, channel_url: str) -> Inline
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 async def deliver_script_to_user(chat_id: int, script: dict, channel_url: str):
-    """Delivers script to user with visual loading step, banner, lua code, copy button, and channel link."""
+    """Delivers script to user immediately with banner, lua code, copy button, and channel link."""
     script_code = script.get("script_code", "")
     game_title = script.get("game_name", "Roblox")
 
-    # 1. Interactive visual loading step
-    loading_banner = getattr(config, "BANNER_LAPIS_CLEAN", None) or getattr(config, "BANNER_DELIVERY", None) or config.BANNER_PATH
-    loading_msg = None
-    if loading_banner and loading_banner.exists():
-        try:
-            loading_msg = await bot.send_photo(
-                chat_id=chat_id,
-                photo=FSInputFile(loading_banner),
-                caption=f"⚡ <b>Загрузка скрипта для «{game_title}»...</b>\n\n⏳ <i>Проверяем актуальность версии и отсутствие ключей (100% Keyless)...</i>"
-            )
-        except Exception:
-            pass
-
-    if loading_msg:
-        await asyncio.sleep(0.9)
-        try:
-            await loading_msg.delete()
-        except Exception:
-            pass
-
-    # 2. Deliver actual script
     delivery_text = post_builder.build_user_delivery_message(
         game_name=game_title,
         script_code=script_code
     )
     delivery_kb = build_script_delivery_keyboard(script_code, channel_url)
     
-    delivery_banner = getattr(config, "BANNER_DELIVERY", None)
-    lapis_banner = getattr(config, "BANNER_LAPIS_CLEAN", None) or getattr(config, "BANNER_LAPIS", None)
-    banner_to_use = delivery_banner if (delivery_banner and delivery_banner.exists()) else lapis_banner or config.BANNER_PATH
+    delivery_banner = getattr(config, "BANNER_LAPIS", None) or getattr(config, "BANNER_DELIVERY", None) or getattr(config, "BANNER_LAPIS_CLEAN", None)
+    banner_to_use = delivery_banner if (delivery_banner and delivery_banner.exists()) else config.BANNER_PATH
     
     if banner_to_use and banner_to_use.exists():
         photo = FSInputFile(banner_to_use)
@@ -233,7 +211,7 @@ async def handle_start(message: Message, command: CommandObject):
         script_key = args.strip()
         script = await database.get_script(script_key)
         
-        if not script:
+        if not script and not (script_key.startswith("s") and script_key[1:].isdigit()):
             clean_arg = script_key.lower().replace("_", " ").replace("-", " ")
             logger.info(f"Script '{script_key}' not found immediately. Recovering online for '{clean_arg}'...")
             status_wait = await message.answer("🔄 <i>Загружаю актуальную версию скрипта...</i>")
@@ -405,7 +383,7 @@ async def handle_check_subscription(call: CallbackQuery):
 
         # Deliver script
         script = await database.get_script(target)
-        if not script:
+        if not script and not (target.startswith("s") and target[1:].isdigit()):
             clean_target = target.lower().replace("_", " ").replace("-", " ")
             recovered = await script_finder.search_scripts_online(clean_target)
             if recovered:
@@ -727,20 +705,28 @@ async def list_scripts_handler(call: CallbackQuery):
         await call.answer("⛔ Нет доступа", show_alert=True)
         return
 
-    scripts = await database.get_all_scripts(limit=10)
+    scripts = await database.get_all_scripts(limit=25)
     if not scripts:
         await call.answer("База скриптов пока пуста!", show_alert=True)
         return
 
     bot_info = await bot.get_me()
     bot_user = bot_info.username or config.BOT_USERNAME
+    channel = await database.get_setting("channel_id", config.CHANNEL_ID)
+    channel_clean = channel.replace("@", "") if channel else "script_drop"
 
-    text_lines = ["📋 <b>Последние скрипты:</b>\n"]
+    text_lines = [
+        "📋 <b>Опубликованные скрипты в базе:</b>",
+        "━━━━━━━━━━━━━━━━━━━━━\n"
+    ]
     for s in scripts:
         link = f"https://t.me/{bot_user}?start={s['script_key']}"
+        post_link = ""
+        if s.get("channel_message_id"):
+            post_link = f" | <a href=\"https://t.me/{channel_clean}/{s['channel_message_id']}\">📢 Пост #{s['channel_message_id']}</a>"
         text_lines.append(
-            f"🔹 <b>{s['game_name']}</b> (Ключ: <code>{s['script_key']}</code>)\n"
-            f"🔗 <a href=\"{link}\">Ссылка</a>\n"
+            f"🎮 <b>{s['game_name']}</b> (Ключ: <code>{s['script_key']}</code>)\n"
+            f"🔗 <a href=\"{link}\">Ссылка на выдачу</a>{post_link}\n"
         )
 
     kb = InlineKeyboardMarkup(
@@ -981,8 +967,104 @@ async def execute_post_header(call: CallbackQuery):
 _SEARCH_CACHE = {}
 _SEARCH_REQ_MAP = {}
 
+PAGE_SIZE = 2
+
+async def send_search_results_page(target, user_id: int, page: int = 0):
+    """Renders a page of search results with interactive pagination controls."""
+    results = _SEARCH_CACHE.get(user_id, [])
+    if not results:
+        await target.answer("⚠️ Результаты поиска устарели. Пожалуйста, повторите поиск.")
+        return
+
+    total_results = len(results)
+    total_pages = (total_results + PAGE_SIZE - 1) // PAGE_SIZE
+    page = max(0, min(page, total_pages - 1))
+
+    start_idx = page * PAGE_SIZE
+    end_idx = min(start_idx + PAGE_SIZE, total_results)
+    page_items = results[start_idx:end_idx]
+
+    import html as html_lib
+
+    # Header for the current page
+    header_text = (
+        f"⚡ <b>НАЙДЕНО СКРИПТОВ БЕЗ КЛЮЧЕЙ: {total_results}</b> ⚡\n"
+        f"━━━━━━━━━━━━━━━━━━━━━\n"
+        f"📖 Показаны скрипты <b>#{start_idx + 1}–#{end_idx}</b> из <b>{total_results}</b> (Страница {page + 1}/{total_pages})\n"
+        f"Выберите действие под нужным читом или перелистните дальше:"
+    )
+    await target.answer(header_text)
+
+    for i, item in enumerate(page_items):
+        idx = start_idx + i
+        preview_code = item['script_code']
+        if len(preview_code) > 120:
+            preview_display = preview_code[:115] + "..."
+        else:
+            preview_display = preview_code
+
+        verified_badge = " [⭐ Проверено]" if item.get("is_verified") else ""
+        card_text = (
+            f"🎮 <b>Игра:</b> {item['game_name']}\n"
+            f"📝 <b>Скрипт:</b> {item['title']}{verified_badge}\n"
+            f"🌐 <b>Источник:</b> {item['source']}\n"
+            f"🛡 <b>Безопасность:</b> 🟢 <i>{item['safety_note']}</i>\n"
+            f"🔑 <b>Ключ:</b> 🟢 <i>100% Keyless (Без ключа)</i>\n\n"
+            f"🛠 <b>Реальный функционал чита:</b>\n"
+            f"{item['features']}\n\n"
+            f"📜 <b>Код:</b>\n<code>{html_lib.escape(preview_display)}</code>"
+        )
+
+        card_kb = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [InlineKeyboardButton(text=f"📢 Опубликовать #{idx+1} в канал", callback_data=f"pub_found:{idx}")],
+                [InlineKeyboardButton(text=f"💾 Сохранить #{idx+1} в базу", callback_data=f"save_found:{idx}")],
+            ]
+        )
+
+        img_url = item.get("image_url")
+        sent_card = False
+        if img_url and img_url.startswith("http"):
+            try:
+                await target.answer_photo(photo=img_url, caption=card_text, reply_markup=card_kb)
+                sent_card = True
+            except Exception as pe:
+                logger.warning(f"Could not send card with photo {img_url}: {pe}")
+
+        if not sent_card:
+            fallback_banner = getattr(config, "BANNER_LAPIS_CLEAN", None) or getattr(config, "BANNER_LAPIS", None) or config.BANNER_PATH
+            if fallback_banner and fallback_banner.exists():
+                try:
+                    await target.answer_photo(photo=FSInputFile(fallback_banner), caption=card_text, reply_markup=card_kb)
+                    sent_card = True
+                except Exception as fe:
+                    logger.warning(f"Could not send card with fallback banner: {fe}")
+
+        if not sent_card:
+            await target.answer(card_text, reply_markup=card_kb)
+
+    # Navigation buttons
+    nav_buttons = []
+    nav_row = []
+    if page > 0:
+        nav_row.append(InlineKeyboardButton(text="⬅️ Предыдущие", callback_data=f"search_page:{page - 1}"))
+    nav_row.append(InlineKeyboardButton(text=f"📄 {page + 1}/{total_pages}", callback_data="noop"))
+    if page + 1 < total_pages:
+        nav_row.append(InlineKeyboardButton(text="Следующие ➡️", callback_data=f"search_page:{page + 1}"))
+    if nav_row:
+        nav_buttons.append(nav_row)
+
+    nav_buttons.append([
+        InlineKeyboardButton(text="🔍 Искать другую игру", callback_data="admin_search_scripts"),
+        InlineKeyboardButton(text="👑 В меню админа", callback_data="open_admin_panel")
+    ])
+
+    nav_kb = InlineKeyboardMarkup(inline_keyboard=nav_buttons)
+    await target.answer("⚙️ <b>Навигация по найденным хабам и скриптам:</b>", reply_markup=nav_kb)
+
+
 async def perform_search_and_display(chat_id: int, user_id: int, query: str, send_target):
-    """Searches online for keyless scripts and presents results with publish/save actions."""
+    """Searches online for keyless scripts and presents results with pagination and actions."""
     status_msg = await send_target.answer(f"⏳ <b>Ищу проверенные скрипты для «{html.escape(query)}» (строго БЕЗ КЛЮЧЕЙ)...</b>")
     results = await script_finder.search_scripts_online(query)
     try:
@@ -1004,53 +1086,7 @@ async def perform_search_and_display(chat_id: int, user_id: int, query: str, sen
         return
 
     _SEARCH_CACHE[user_id] = results
-    await send_target.answer(f"🎉 <b>Найдено проверенных скриптов БЕЗ КЛЮЧЕЙ: {len(results[:2])}</b>\nВыберите действие под любым из них:")
-
-    import html as html_lib
-    for idx, item in enumerate(results[:2]):
-        preview_code = item['script_code']
-        if len(preview_code) > 120:
-            preview_display = preview_code[:115] + "..."
-        else:
-            preview_display = preview_code
-
-        card_text = (
-            f"🎮 <b>Игра:</b> {item['game_name']}\n"
-            f"📝 <b>Скрипт:</b> {item['title']}\n"
-            f"🌐 <b>Источник:</b> {item['source']}\n"
-            f"🛡 <b>Безопасность:</b> 🟢 <i>{item['safety_note']}</i>\n\n"
-            f"🛠 <b>Реальный функционал чита:</b>\n"
-            f"{item['features']}\n\n"
-            f"📜 <b>Код:</b>\n<code>{html_lib.escape(preview_display)}</code>"
-        )
-
-        card_kb = InlineKeyboardMarkup(
-            inline_keyboard=[
-                [InlineKeyboardButton(text="📢 Опубликовать в канал (с фото чита)", callback_data=f"pub_found:{idx}")],
-                [InlineKeyboardButton(text="💾 Только сохранить в базу", callback_data=f"save_found:{idx}")],
-            ]
-        )
-
-        img_url = item.get("image_url")
-        sent_card = False
-        if img_url and img_url.startswith("http"):
-            try:
-                await send_target.answer_photo(photo=img_url, caption=card_text, reply_markup=card_kb)
-                sent_card = True
-            except Exception as pe:
-                logger.warning(f"Could not send card with photo {img_url}: {pe}")
-
-        if not sent_card:
-            fallback_banner = getattr(config, "BANNER_LAPIS_CLEAN", None) or getattr(config, "BANNER_LAPIS", None) or config.BANNER_PATH
-            if fallback_banner and fallback_banner.exists():
-                try:
-                    await send_target.answer_photo(photo=FSInputFile(fallback_banner), caption=card_text, reply_markup=card_kb)
-                    sent_card = True
-                except Exception as fe:
-                    logger.warning(f"Could not send card with fallback banner: {fe}")
-
-        if not sent_card:
-            await send_target.answer(card_text, reply_markup=card_kb)
+    await send_search_results_page(send_target, user_id, page=0)
 
 
 @dp.callback_query(F.data == "admin_search_scripts")
@@ -1219,6 +1255,21 @@ async def callback_save_found(call: CallbackQuery):
         f"Ссылка для выдачи: {deep_link}"
     )
     await call.answer("Сохранено!")
+
+
+@dp.callback_query(F.data.startswith("search_page:"))
+async def callback_search_page(call: CallbackQuery):
+    if not await is_admin(call.from_user.id):
+        await call.answer("⛔ Нет доступа", show_alert=True)
+        return
+    page = int(call.data.split(":")[1])
+    await call.answer()
+    await send_search_results_page(call.message, call.from_user.id, page=page)
+
+
+@dp.callback_query(F.data == "noop")
+async def callback_noop(call: CallbackQuery):
+    await call.answer()
 
 
 # --- CHANGELOG PUBLISHER & STYLE SWITCHER ---

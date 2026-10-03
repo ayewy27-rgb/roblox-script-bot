@@ -318,65 +318,121 @@ def generate_ai_features(game_name: str) -> str:
         
     return DEFAULT_FEATURES
 
-def format_features(raw_features: str) -> str:
-    """Formats features list into a neat bulleted list with emojis."""
-    if not raw_features or raw_features.strip().lower() in ["по дефолту", "дефолт", "default", "-", "1", "ии", "ai"]:
+def format_features(raw_features: str, game_name: str = "") -> str:
+    """Formats features list into a neat bulleted list with emojis and Russian translations."""
+    clean_g = game_name.strip().lower()
+    if clean_g:
+        for k, v in KNOWN_GAMES_FEATURES.items():
+            if k == clean_g or k in clean_g or clean_g in k:
+                if not raw_features or raw_features.strip().lower() in ["по дефолту", "дефолт", "default", "-", "1", "ии", "ai", "none"]:
+                    return v
+
+    if not raw_features or raw_features.strip().lower() in ["по дефолту", "дефолт", "default", "-", "1", "ии", "ai", "none"]:
         return DEFAULT_FEATURES
     
     items = re.split(r'[,;\n]+', raw_features)
     formatted = []
+    seen = set()
     
     replacements = {
-        "есп": "ESP (ВХ / Подсветка игроков и предметов)",
-        "esp": "ESP (ВХ / Подсветка игроков и предметов)",
-        "аим": "Aimbot (Точный скрытый аимбот)",
-        "aim": "Aimbot (Точный скрытый аимбот)",
-        "автофарм": "Auto Farm (Автоматический фарм)",
-        "авто фарм": "Auto Farm (Автоматический фарм)",
-        "autofarm": "Auto Farm (Автоматический фарм)",
-        "спид": "Speed (Увеличение скорости ходьбы)",
-        "флай": "Fly (Свободный режим полёта)",
-        "тп": "Teleport (Мгновенная телепортация)",
-        "годмод": "God Mode (Полная неуязвимость / Бессмертие)",
-        "инфинит": "Infinite Jump (Бесконечный прыжок)",
-        "норекоил": "No Recoil (Стрельба без отдачи)",
-        "пари": "Auto Parry (Автоматическое парирование)",
+        "auto farm": "🔥 Auto Farm (Авто-фарм уровня и ресурсов)",
+        "autofarm": "🔥 Auto Farm (Авто-фарм уровня и ресурсов)",
+        "автофарм": "🔥 Auto Farm (Авто-фарм уровня и ресурсов)",
+        "авто фарм": "🔥 Auto Farm (Авто-фарм уровня и ресурсов)",
+        "auto raid": "⚔️ Auto Raid (Авто-рейды и фарм боссов)",
+        "raid": "⚔️ Auto Raid (Авто-рейды и фарм боссов)",
+        "dungeon": "⚔️ Auto Dungeon (Авто-прохождение подземелий)",
+        "fruit sniper": "🍎 Fruit Sniper & ESP (Поиск и авто-подбор фруктов)",
+        "fruit": "🍎 Fruit Sniper & ESP (Поиск и авто-подбор фруктов)",
+        "фрукт": "🍎 Fruit Sniper & ESP (Поиск и авто-подбор фруктов)",
+        "silent aim": "🎯 Silent Aim & Camlock (Скрытый аимбот в голову)",
+        "aimbot": "🎯 Aimbot (Точная авто-наводка на противников)",
+        "аим": "🎯 Silent Aim & Camlock (Скрытый аимбот в голову)",
+        "aim": "🎯 Silent Aim & Camlock (Скрытый аимбот в голову)",
+        "esp": "👁 ESP / Wallhack (Подсветка игроков и лута сквозь стены)",
+        "есп": "👁 ESP / Wallhack (Подсветка игроков и лута сквозь стены)",
+        "вх": "👁 ESP / Wallhack (Подсветка игроков и лута сквозь стены)",
+        "wallhack": "👁 ESP / Wallhack (Подсветка игроков и лута сквозь стены)",
+        "godmode": "🛡 Godmode (Бессмертие и защита от любого урона)",
+        "годмод": "🛡 Godmode (Бессмертие и защита от любого урона)",
+        "god mode": "🛡 Godmode (Бессмертие и защита от любого урона)",
+        "бессмертие": "🛡 Godmode (Бессмертие и защита от любого урона)",
+        "speed": "💨 Speed Boost (Увеличенная скорость бега)",
+        "спид": "💨 Speed Boost (Увеличенная скорость бега)",
+        "скорость": "💨 Speed Boost (Увеличенная скорость бега)",
+        "walkspeed": "💨 Speed Boost (Увеличенная скорость бега)",
+        "fly": "🚀 Fly Mode (Свободный режим полёта по карте)",
+        "флай": "🚀 Fly Mode (Свободный режим полёта по карте)",
+        "полет": "🚀 Fly Mode (Свободный режим полёта по карте)",
+        "полёт": "🚀 Fly Mode (Свободный режим полёта по карте)",
+        "noclip": "👻 Noclip (Прохождение сквозь любые препятствия)",
+        "ноклип": "👻 Noclip (Прохождение сквозь любые препятствия)",
+        "teleport": "⚡ Teleport (Мгновенная телепортация)",
+        "телепорт": "⚡ Teleport (Мгновенная телепортация)",
+        "тп": "⚡ Teleport (Мгновенная телепортация)",
+        "tp": "⚡ Teleport (Мгновенная телепортация)",
+        "auto parry": "⚔️ Auto Parry 100% (Идеальное парирование без промахов)",
+        "пари": "⚔️ Auto Parry 100% (Идеальное парирование без промахов)",
+        "auto steal": "🥚 Instant Auto Steal (Мгновенная кража)",
+        "steal": "🥚 Instant Auto Steal (Мгновенная кража)",
+        "кража": "🥚 Instant Auto Steal (Мгновенная кража)",
+        "auto fish": "🎣 Auto Fish & Instant Catch (Авто-рыбалка и идеальный улов)",
+        "рыбалка": "🎣 Auto Fish & Instant Catch (Авто-рыбалка и идеальный улов)",
+        "killaura": "🗡 Killaura 360° (Круговая авто-атака всех противников)",
+        "aura": "🗡 Killaura 360° (Круговая авто-атака всех противников)",
+        "infinite jump": "🦘 Infinite Jump (Бесконечные прыжки в воздухе)",
+        "инфинит": "🦘 Infinite Jump (Бесконечные прыжки в воздухе)",
+        "прыжок": "🦘 Infinite Jump (Бесконечные прыжки в воздухе)",
+        "no recoil": "🎯 No Recoil (Стрельба без отдачи и разброса)",
+        "fullbright": "💡 Fullbright (Яркое освещение в темноте)",
+        "фулбрайт": "💡 Fullbright (Яркое освещение в темноте)",
+        "auto combo": "💥 Auto Combo (Мгновенные серии комбо)",
     }
     
     for item in items:
-        item = item.strip()
-        if not item:
+        # Strip all bullets, brackets, dashes, symbols
+        cleaned = re.sub(r'^[•\-\*»\>\+\#\=\s]+', '', item).strip()
+        cleaned = re.sub(r'\[\-\-|\-\-\]|\[\+\]|\[\>\]|\[\!\]|\[.*?\]|\(.*?\)', '', cleaned).strip()
+        cleaned = re.sub(r'[*#_`~=]', '', cleaned).strip()
+        if not cleaned or len(cleaned) < 2:
             continue
-        low = item.lower()
-        matched = False
+        low = cleaned.lower()
+        if any(bad in low for bad in ['discord', 'youtube', 'key', 'link', 'http', 'loadstring', 'subscribe', 'credits', 'support']):
+            continue
+
+        matched_line = None
         for k, v in replacements.items():
             if k == low or k in low:
-                formatted.append(f"• {v}")
-                matched = True
+                matched_line = f"• {v}"
                 break
-        if not matched:
-            cleaned = item.lstrip("•-* ").strip()
-            if cleaned:
-                formatted.append(f"• {cleaned.capitalize()}")
+        if not matched_line:
+            matched_line = f"• 🔥 {cleaned.capitalize()}"
+
+        if matched_line not in seen:
+            seen.add(matched_line)
+            formatted.append(matched_line)
                 
     if not formatted:
         return DEFAULT_FEATURES
-    return "\n".join(formatted)
+    return "\n".join(formatted[:6])
 
 def build_channel_post(game_name: str, features: str, executors: str = DEFAULT_EXECUTORS) -> str:
     """Generates a stylish post for the Telegram channel."""
     title = format_game_name(game_name)
-    features_list = format_features(features)
+    features_list = format_features(features, game_name=game_name)
     
     post = (
-        f"⚡ <b>НОВЫЙ СКРИПТ | {title}</b> ⚡\n\n"
-        f"🎮 <b>Игра:</b> <code>{title}</code>\n\n"
-        f"🛠 <b>Функционал:</b>\n"
+        f"⚡ <b>НОВЫЙ СКРИПТ | {title}</b> ⚡\n"
+        f"━━━━━━━━━━━━━━━━━━━━━\n"
+        f"🎮 <b>Игра:</b> <code>{title}</code>\n"
+        f"🔑 <b>Ключ:</b> 🟢 <i>НЕ ТРЕБУЕТСЯ (100% Keyless)</i>\n\n"
+        f"🛠 <b>Функционал чита:</b>\n"
         f"{features_list}\n\n"
-        f"🛡 <b>Проверка на вирусы:</b> 🟢 <i>Чистый код (без RAT / стилеров)</i>\n"
+        f"🛡 <b>Безопасность:</b> 🟢 <i>Чистый код (без вирусов и стилеров)</i>\n"
         f"📌 <b>Статус:</b> 🟢 <i>Работает / Undetected</i>\n"
-        f"📱 <b>Поддержка:</b> {executors}\n\n"
-        f"👇 <b>Нажмите на кнопку ниже, чтобы получить скрипт:</b>"
+        f"📱 <b>Поддержка:</b> {executors}\n"
+        f"━━━━━━━━━━━━━━━━━━━━━\n"
+        f"👇 <b>Нажмите на кнопку ниже, чтобы получить готовый скрипт:</b>"
     )
     return post
 
@@ -394,7 +450,8 @@ def build_user_delivery_message(game_name: str, script_code: Optional[str] = Non
         f"👋 <b>Привет! Вот держи готовый скрипт для {title}:</b>\n\n"
         f'<pre><code class="language-lua">{escaped_code}</code></pre>\n\n'
         f"💡 <i>Нажмите на код выше, чтобы скопировать его в буфер обмена.</i>\n\n"
-        f"🛡 <b>Безопасность:</b> 🟢 <i>Проверено: чистый loadstring, вирусов и стилеров нет</i>\n\n"
+        f"🛡 <b>Безопасность:</b> 🟢 <i>Проверено: чистый loadstring, вирусов и стилеров нет</i>\n"
+        f"🔑 <b>Ключ:</b> 🟢 <i>Не требуется (100% Keyless)</i>\n\n"
         f"🚀 <b>Удачи в игре!</b>"
     )
 

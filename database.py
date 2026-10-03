@@ -85,6 +85,9 @@ async def init_db():
         # Synchronize from persistent JSON store into SQLite
         store = _read_scripts_store()
         if store:
+            valid_keys = tuple(store.keys())
+            placeholders = ",".join("?" for _ in valid_keys)
+            await db.execute(f"DELETE FROM scripts WHERE script_key NOT IN ({placeholders})", valid_keys)
             for key, item in store.items():
                 s_id = item.get("id")
                 s_key = item.get("script_key", key)

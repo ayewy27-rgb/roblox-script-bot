@@ -515,30 +515,30 @@ def parse_real_features(raw_features: str, title: str, game_name: str) -> str:
     # Fallback to intelligent heuristic generator
     return post_builder.generate_ai_features(game_name)
 
-def _fetch_scriptblox_page(query: str, page: int = 1, keyless_param: bool = True) -> List[Dict[str, Any]]:
-    key_flag = "&key=0" if keyless_param else ""
-    url = f"https://scriptblox.com/api/script/search?q={urllib.parse.quote(query)}&mode=free{key_flag}&page={page}"
+def _fetch_scriptblox_page(query: str, page: int = 1) -> List[Dict[str, Any]]:
+    url = f"https://scriptblox.com/api/script/search?q={urllib.parse.quote(query)}&page={page}"
     req = urllib.request.Request(
         url,
         headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
     )
     try:
-        with urllib.request.urlopen(req, timeout=6) as response:
+        with urllib.request.urlopen(req, timeout=5) as response:
             data = json.loads(response.read().decode("utf-8"))
             return data.get("result", {}).get("scripts", [])
     except Exception as e:
-        logger.warning(f"Error fetching ScriptBlox for '{query}' (page {page}, keyless={keyless_param}): {e}")
+        logger.warning(f"Error fetching ScriptBlox for '{query}' (page {page}): {e}")
         return []
 
 def _fetch_scriptblox_sync(query: str) -> List[Dict[str, Any]]:
-    """Fetches up to 40 candidate scripts using deep search across multiple pages."""
-    items = _fetch_scriptblox_page(query, page=1, keyless_param=True)
-    if len(items) < 5:
-        items.extend(_fetch_scriptblox_page(query, page=2, keyless_param=True))
-    if len(items) < 3:
-        free_items = _fetch_scriptblox_page(query, page=1, keyless_param=False)
-        items.extend(free_items)
-    return items
+    """Fetches candidate scripts across pages 1, 2, and 3."""
+    all_items = []
+    for p in range(1, 4):
+        items = _fetch_scriptblox_page(query, page=p)
+        if items:
+            all_items.extend(items)
+        if len(all_items) >= 40:
+            break
+    return all_items
 
 def _fetch_single_scriptblox_details(slug: str) -> Dict[str, Any]:
     url = f"https://scriptblox.com/api/script/{slug}"
@@ -566,7 +566,10 @@ async def search_scripts_online(game_query: str) -> List[Dict[str, Any]]:
     clean_query = SYNONYMS.get(raw_query)
     if not clean_query:
         for syn_k, syn_v in SYNONYMS.items():
-            if syn_k in raw_query or raw_query in syn_k:
+            if len(syn_k) >= 3 and syn_k in raw_query:
+                clean_query = syn_v
+                break
+            elif len(raw_query) >= 4 and raw_query in syn_k:
                 clean_query = syn_v
                 break
     if not clean_query:
@@ -655,13 +658,13 @@ async def search_scripts_online(game_query: str) -> List[Dict[str, Any]]:
         is_direct = (clean_query in t) or (clean_query in g)
         is_verified = bool(item.get("verified", False))
         likes = item.get("likeCount", 0)
-        return (is_direct, is_verified, likes)
+        views = item.get("views", 0)
+        return (is_direct, is_verified, likes, views)
 
     candidates.sort(key=score_script, reverse=True)
 
-    # Take needed number to make 2 results
-    needed = 2 - len(results)
-    top_items = candidates[:needed]
+    # Take up to 10 top candidates from live ScriptBlox search to provide full variety
+    top_items = candidates[:10]
 
     for item in top_items:
         slug = item.get("slug")
@@ -706,4 +709,4 @@ async def search_scripts_online(game_query: str) -> List[Dict[str, Any]]:
             "image_url": image_url,
         })
 
-    return results[:2]
+    return results[:12]
