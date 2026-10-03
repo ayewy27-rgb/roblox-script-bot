@@ -31,6 +31,13 @@ def _write_scripts_store(data: Dict[str, Any]):
 
 async def init_db():
     async with aiosqlite.connect(DB_PATH) as db:
+        # Performance Pragmas: WAL mode for fast concurrent non-blocking reads/writes
+        await db.execute("PRAGMA journal_mode = WAL;")
+        await db.execute("PRAGMA synchronous = NORMAL;")
+        await db.execute("PRAGMA cache_size = 10000;")
+        await db.execute("PRAGMA temp_store = MEMORY;")
+        await db.execute("PRAGMA busy_timeout = 5000;")
+
         await db.execute("""
             CREATE TABLE IF NOT EXISTS scripts (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -71,6 +78,25 @@ async def init_db():
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS shown_scripts_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                script_hash TEXT NOT NULL,
+                game_name TEXT NOT NULL,
+                shown_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        await db.execute("""
+            CREATE INDEX IF NOT EXISTS idx_shown_history ON shown_scripts_history(user_id, script_hash, shown_at)
+        """)
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_user_history_uid ON user_history(user_id)")
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_script_requests_status ON script_requests(status)")
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_scripts_game ON scripts(game_name)")
+
+        # Auto-prune old 7-day memory older than 14 days so database never clutters
+        await db.execute("DELETE FROM shown_scripts_history WHERE shown_at < datetime('now', '-14 days')")
+        await db.execute("PRAGMA optimize;")
         
         # Check if columns exist in older table
         async with db.execute("PRAGMA table_info(scripts)") as cursor:
@@ -461,4 +487,69 @@ async def get_script_request_stats() -> Dict[str, Any]:
             "unique_users": unique_users,
             "top_games": top_games,
         }
+
+import hashlib
+
+def hash_script_code(code: str) -> str:
+    """Computes deterministic MD5 hash of normalized script code."""
+    safe_code = str(code or "").strip()
+    cleaned = re.sub(r'[\s\(\)\"\']+', '', safe_code.lower())
+    match = re.search(r'https?://[^\s\"\'\)]+', safe_code)
+    if match:
+        cleaned = re.sub(r'https?://', '', match.group(0).lower().strip())
+    return hashlib.md5(cleaned.encode("utf-8")).hexdigest()
+
+async def record_shown_scripts(user_id: int, script_codes: List[str], game_name: str = ""):
+    """Records that these scripts were shown to this user/admin to avoid repetition for 7 days."""
+    if not user_id or not script_codes:
+        return
+    try:
+        async with aiosqlite.connect(DB_PATH) as db:
+            for code in script_codes:
+                if not code:
+                    continue
+                h = hash_script_code(code)
+                await db.execute(
+                    "INSERT INTO shown_scripts_history (user_id, script_hash, game_name) VALUES (?, ?, ?)",
+                    (user_id, h, game_name or "")
+                )
+            # Auto-prune records older than 14 days to keep database compact & fast
+            await db.execute("DELETE FROM shown_scripts_history WHERE shown_at < datetime('now', '-14 days')")
+            await db.commit()
+    except Exception as e:
+        logger.warning(f"Error recording shown scripts in SQLite: {e}")
+
+async def get_recently_shown_hashes(user_id: int, days: int = 7) -> set:
+    """Returns set of script hashes shown to this user within the last N days."""
+    if not user_id:
+        return set()
+    try:
+        async with aiosqlite.connect(DB_PATH) as db:
+            async with db.execute(
+                "SELECT script_hash FROM shown_scripts_history WHERE user_id = ? AND shown_at >= datetime('now', ?)",
+                (user_id, f"-{days} days")
+            ) as cursor:
+                rows = await cursor.fetchall()
+                return {r[0] for r in rows}
+    except Exception as e:
+        logger.warning(f"Error fetching recently shown hashes for {user_id}: {e}")
+        return set()
+
+async def clear_shown_history(user_id: int, game_name: Optional[str] = None):
+    """Allows user/admin to reset their 7-day memory cache if they want to view all scripts again."""
+    if not user_id:
+        return
+    try:
+        async with aiosqlite.connect(DB_PATH) as db:
+            if game_name:
+                await db.execute(
+                    "DELETE FROM shown_scripts_history WHERE user_id = ? AND LOWER(game_name) LIKE ?",
+                    (user_id, f"%{game_name.lower().strip()}%")
+                )
+            else:
+                await db.execute("DELETE FROM shown_scripts_history WHERE user_id = ?", (user_id,))
+            await db.commit()
+    except Exception as e:
+        logger.warning(f"Error clearing shown history for {user_id}: {e}")
+
 

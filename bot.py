@@ -6,7 +6,7 @@ import re
 import html
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
-from typing import Optional
+from typing import Optional, List, Dict, Any, Set, Tuple
 
 from aiogram import Bot, Dispatcher, F, types
 from aiogram.enums import ParseMode, ChatMemberStatus
@@ -143,6 +143,32 @@ def get_webapp_url(user_id: int = 0) -> str:
         return f"{url}{sep}user_id={user_id}"
     return url
 
+# --- SEARCH CACHE & MESSAGE TRACKER (CLEAN CHAT LIFECYCLE) ---
+_SEARCH_CACHE: Dict[int, List[Dict[str, Any]]] = {}
+_SEARCH_CACHE_TIME: Dict[int, float] = {}
+_SEARCH_REQ_MAP: Dict[int, int] = {}
+_SEARCH_MSG_TRACKER: Dict[int, List[int]] = {}
+
+def _prune_search_cache():
+    """Removes cached searches older than 20 minutes to prevent memory leaks."""
+    import time
+    now = time.time()
+    expired = [uid for uid, t in _SEARCH_CACHE_TIME.items() if now - t > 1200]
+    for uid in expired:
+        _SEARCH_CACHE.pop(uid, None)
+        _SEARCH_CACHE_TIME.pop(uid, None)
+        _SEARCH_REQ_MAP.pop(uid, None)
+        _SEARCH_MSG_TRACKER.pop(uid, None)
+
+async def cleanup_user_search_messages(chat_id: int, user_id: int):
+    """Deletes previous search cards and headers from chat so messages don't accumulate or clutter."""
+    old_ids = _SEARCH_MSG_TRACKER.pop(user_id, [])
+    for mid in old_ids:
+        try:
+            await bot.delete_message(chat_id=chat_id, message_id=mid)
+        except Exception:
+            pass
+
 def get_admin_menu_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
@@ -215,7 +241,7 @@ async def handle_start(message: Message, command: CommandObject):
             clean_arg = script_key.lower().replace("_", " ").replace("-", " ")
             logger.info(f"Script '{script_key}' not found immediately. Recovering online for '{clean_arg}'...")
             status_wait = await message.answer("🔄 <i>Загружаю актуальную версию скрипта...</i>")
-            recovered = await script_finder.search_scripts_online(clean_arg)
+            recovered = await script_finder.search_scripts_online(clean_arg, user_id=message.from_user.id)
             try:
                 await status_wait.delete()
             except Exception:
@@ -385,7 +411,7 @@ async def handle_check_subscription(call: CallbackQuery):
         script = await database.get_script(target)
         if not script and not (target.startswith("s") and target[1:].isdigit()):
             clean_target = target.lower().replace("_", " ").replace("-", " ")
-            recovered = await script_finder.search_scripts_online(clean_target)
+            recovered = await script_finder.search_scripts_online(clean_target, user_id=call.from_user.id)
             if recovered:
                 best = recovered[0]
                 await database.add_script(
@@ -444,6 +470,7 @@ async def callback_admin_panel(call: CallbackQuery):
     if not await is_admin(user_id):
         await call.message.answer("⛔ У вас нет доступа к панели администратора.")
         return
+    await cleanup_user_search_messages(call.message.chat.id, user_id)
     await send_admin_panel(chat_id=call.message.chat.id, user_id=user_id)
 
 # --- FSM: MANUAL POST CREATION ---
@@ -490,6 +517,21 @@ async def process_game_name(message: Message, state: FSMContext):
         reply_markup=kb,
     )
 
+async def prompt_for_executors(message: Message, state: FSMContext):
+    await state.set_state(PostCreation.waiting_for_executors)
+    kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="💻+📱 Все (PC + Mobile: Delta, Arceus X, Fluxus, Codex, Solara)", callback_data="exec_all")],
+            [InlineKeyboardButton(text="📱 Только Мобильные (Delta, Arceus X, Fluxus, Codex)", callback_data="exec_mobile")],
+            [InlineKeyboardButton(text="💻 Только ПК (Solara, Wave, Celery)", callback_data="exec_pc")],
+            [InlineKeyboardButton(text="❌ Отмена", callback_data="cancel_fsm")],
+        ]
+    )
+    await message.answer(
+        "📱 <b>Шаг 3 из 4: На каких экзекуторах работает скрипт?</b>",
+        reply_markup=kb,
+    )
+
 @dp.callback_query(PostCreation.waiting_for_features, F.data == "use_ai_features")
 async def process_ai_features(call: CallbackQuery, state: FSMContext):
     await call.answer("🤖 Функционал сгенерирован ИИ!")
@@ -505,28 +547,12 @@ async def process_default_features(call: CallbackQuery, state: FSMContext):
     await state.update_data(features=post_builder.DEFAULT_FEATURES)
     await prompt_for_executors(call.message, state)
 
-
 @dp.message(PostCreation.waiting_for_features)
 async def process_custom_features(message: Message, state: FSMContext):
     custom_features = message.text.strip()
     formatted = post_builder.format_features(custom_features)
     await state.update_data(features=formatted)
     await prompt_for_executors(message, state)
-
-async def prompt_for_executors(message: Message, state: FSMContext):
-    await state.set_state(PostCreation.waiting_for_executors)
-    kb = InlineKeyboardMarkup(
-        inline_keyboard=[
-            [InlineKeyboardButton(text="💻+📱 Все (PC + Mobile: Delta, Arceus X, Fluxus, Codex, Solara)", callback_data="exec_all")],
-            [InlineKeyboardButton(text="📱 Только Мобильные (Delta, Arceus X, Fluxus, Codex)", callback_data="exec_mobile")],
-            [InlineKeyboardButton(text="💻 Только ПК (Solara, Wave, Celery)", callback_data="exec_pc")],
-            [InlineKeyboardButton(text="❌ Отмена", callback_data="cancel_fsm")],
-        ]
-    )
-    await message.answer(
-        "📱 <b>Шаг 3 из 4: На каких экзекуторах работает скрипт?</b>",
-        reply_markup=kb,
-    )
 
 @dp.callback_query(PostCreation.waiting_for_executors, F.data.startswith("exec_"))
 async def process_executor_choice(call: CallbackQuery, state: FSMContext):
@@ -742,8 +768,10 @@ async def list_scripts_handler(call: CallbackQuery):
 async def cancel_handler(call: CallbackQuery, state: FSMContext):
     await call.answer()
     await state.clear()
+    await cleanup_user_search_messages(call.message.chat.id, call.from_user.id)
     try:
-        await call.message.edit_text("❌ Действие отменено.")
+        back_kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="👑 В меню админа", callback_data="open_admin_panel")]])
+        await call.message.edit_text("❌ Действие отменено.", reply_markup=back_kb)
     except Exception:
         pass
 
@@ -964,13 +992,14 @@ async def execute_post_header(call: CallbackQuery):
 
 # --- ADMIN SCRIPT SEARCH (PULSEHUB & SCRIPTBLOX SAFE FINDER) ---
 
-_SEARCH_CACHE = {}
-_SEARCH_REQ_MAP = {}
-
 PAGE_SIZE = 2
 
 async def send_search_results_page(target, user_id: int, page: int = 0):
-    """Renders a page of search results with interactive pagination controls."""
+    """Renders a page of search results with interactive pagination controls, cleaning previous cards."""
+    chat_id = target.chat.id
+    # Clean up previous page cards so the chat doesn't get flooded with dozens of messages
+    await cleanup_user_search_messages(chat_id, user_id)
+
     results = _SEARCH_CACHE.get(user_id, [])
     if not results:
         await target.answer("⚠️ Результаты поиска устарели. Пожалуйста, повторите поиск.")
@@ -984,7 +1013,7 @@ async def send_search_results_page(target, user_id: int, page: int = 0):
     end_idx = min(start_idx + PAGE_SIZE, total_results)
     page_items = results[start_idx:end_idx]
 
-    import html as html_lib
+    sent_msg_ids: List[int] = []
 
     # Header for the current page
     header_text = (
@@ -993,13 +1022,15 @@ async def send_search_results_page(target, user_id: int, page: int = 0):
         f"📖 Показаны скрипты <b>#{start_idx + 1}–#{end_idx}</b> из <b>{total_results}</b> (Страница {page + 1}/{total_pages})\n"
         f"Выберите действие под нужным читом или перелистните дальше:"
     )
-    await target.answer(header_text)
+    h_msg = await target.answer(header_text)
+    if h_msg:
+        sent_msg_ids.append(h_msg.message_id)
 
     for i, item in enumerate(page_items):
         idx = start_idx + i
         preview_code = item['script_code']
-        if len(preview_code) > 120:
-            preview_display = preview_code[:115] + "..."
+        if len(preview_code) > 85:
+            preview_display = preview_code[:80] + "..."
         else:
             preview_display = preview_code
 
@@ -1009,11 +1040,25 @@ async def send_search_results_page(target, user_id: int, page: int = 0):
             f"📝 <b>Скрипт:</b> {item['title']}{verified_badge}\n"
             f"🌐 <b>Источник:</b> {item['source']}\n"
             f"🛡 <b>Безопасность:</b> 🟢 <i>{item['safety_note']}</i>\n"
-            f"🔑 <b>Ключ:</b> 🟢 <i>100% Keyless (Без ключа)</i>\n\n"
+            f"🔑 <b>Ключ:</b> <i>{item.get('key_label', '🟢 100% Keyless (Без ключа)')}</i>\n\n"
             f"🛠 <b>Реальный функционал чита:</b>\n"
             f"{item['features']}\n\n"
-            f"📜 <b>Код:</b>\n<code>{html_lib.escape(preview_display)}</code>"
+            f"📜 <b>Код:</b>\n<code>{html.escape(preview_display)}</code>"
         )
+
+        # Telegram hard limit for photo captions is 1024 characters
+        if len(card_text) > 1020:
+            short_title = item['title'][:60] + "..." if len(item['title']) > 60 else item['title']
+            card_text = (
+                f"🎮 <b>Игра:</b> {item['game_name']}\n"
+                f"📝 <b>Скрипт:</b> {short_title}{verified_badge}\n"
+                f"🌐 <b>Источник:</b> {item['source']}\n"
+                f"🛡 <b>Безопасность:</b> 🟢 <i>{item['safety_note']}</i>\n"
+                f"🔑 <b>Ключ:</b> <i>{item.get('key_label', '🟢 100% Keyless (Без ключа)')}</i>\n\n"
+                f"🛠 <b>Реальный функционал чита:</b>\n"
+                f"{item['features'][:350]}\n\n"
+                f"📜 <b>Код:</b>\n<code>{html.escape(preview_display[:50])}</code>"
+            )
 
         card_kb = InlineKeyboardMarkup(
             inline_keyboard=[
@@ -1023,25 +1068,26 @@ async def send_search_results_page(target, user_id: int, page: int = 0):
         )
 
         img_url = item.get("image_url")
-        sent_card = False
+        sent_card_msg = None
         if img_url and img_url.startswith("http"):
             try:
-                await target.answer_photo(photo=img_url, caption=card_text, reply_markup=card_kb)
-                sent_card = True
+                sent_card_msg = await target.answer_photo(photo=img_url, caption=card_text, reply_markup=card_kb)
             except Exception as pe:
                 logger.warning(f"Could not send card with photo {img_url}: {pe}")
 
-        if not sent_card:
+        if not sent_card_msg:
             fallback_banner = getattr(config, "BANNER_LAPIS_CLEAN", None) or getattr(config, "BANNER_LAPIS", None) or config.BANNER_PATH
             if fallback_banner and fallback_banner.exists():
                 try:
-                    await target.answer_photo(photo=FSInputFile(fallback_banner), caption=card_text, reply_markup=card_kb)
-                    sent_card = True
+                    sent_card_msg = await target.answer_photo(photo=FSInputFile(fallback_banner), caption=card_text, reply_markup=card_kb)
                 except Exception as fe:
                     logger.warning(f"Could not send card with fallback banner: {fe}")
 
-        if not sent_card:
-            await target.answer(card_text, reply_markup=card_kb)
+        if not sent_card_msg:
+            sent_card_msg = await target.answer(card_text, reply_markup=card_kb)
+
+        if sent_card_msg:
+            sent_msg_ids.append(sent_card_msg.message_id)
 
     # Navigation buttons
     nav_buttons = []
@@ -1060,13 +1106,20 @@ async def send_search_results_page(target, user_id: int, page: int = 0):
     ])
 
     nav_kb = InlineKeyboardMarkup(inline_keyboard=nav_buttons)
-    await target.answer("⚙️ <b>Навигация по найденным хабам и скриптам:</b>", reply_markup=nav_kb)
+    nav_msg = await target.answer("⚙️ <b>Навигация по найденным хабам и скриптам:</b>", reply_markup=nav_kb)
+    if nav_msg:
+        sent_msg_ids.append(nav_msg.message_id)
+
+    _SEARCH_MSG_TRACKER[user_id] = sent_msg_ids
 
 
 async def perform_search_and_display(chat_id: int, user_id: int, query: str, send_target):
     """Searches online for keyless scripts and presents results with pagination and actions."""
+    # Clean previous search cards to keep chat clean
+    await cleanup_user_search_messages(chat_id, user_id)
+
     status_msg = await send_target.answer(f"⏳ <b>Ищу проверенные скрипты для «{html.escape(query)}» (строго БЕЗ КЛЮЧЕЙ)...</b>")
-    results = await script_finder.search_scripts_online(query)
+    results = await script_finder.search_scripts_online(query, user_id=user_id)
     try:
         await status_msg.delete()
     except Exception:
@@ -1085,7 +1138,10 @@ async def perform_search_and_display(chat_id: int, user_id: int, query: str, sen
         )
         return
 
+    import time
+    _prune_search_cache()
     _SEARCH_CACHE[user_id] = results
+    _SEARCH_CACHE_TIME[user_id] = time.time()
     await send_search_results_page(send_target, user_id, page=0)
 
 
@@ -1094,7 +1150,7 @@ async def start_admin_search_scripts(call: CallbackQuery, state: FSMContext):
     if not await is_admin(call.from_user.id):
         await call.answer("⛔ Нет доступа", show_alert=True)
         return
-
+    await cleanup_user_search_messages(call.message.chat.id, call.from_user.id)
     await state.set_state(AdminScriptSearch.waiting_for_game_query)
     cancel_kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="❌ Отмена", callback_data="cancel_fsm")]])
 
@@ -1180,6 +1236,10 @@ async def callback_publish_found(call: CallbackQuery):
                 sent = await bot.send_photo(chat_id=channel, photo=photo, caption=post_text, reply_markup=post_kb)
             else:
                 sent = await bot.send_message(chat_id=channel, text=post_text, reply_markup=post_kb)
+
+        if not sent:
+            await call.answer("❌ Не удалось отправить пост в канал. Проверьте права бота.", show_alert=True)
+            return
 
         await database.update_script_channel_post(script_key, sent.message_id)
 

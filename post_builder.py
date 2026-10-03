@@ -75,6 +75,20 @@ KNOWN_GAMES_FEATURES = {
         "• Speed Boost & Fly (Увеличенная скорость и режим полёта)\n"
         "• Godmode / Safe Zone (Полная защита от других игроков)"
     ),
+    "steal a brainrot": (
+        "• Instant Auto Steal (Мгновенная кража брейнротов у всех игроков)\n"
+        "• Speed Boost & Fly Mode (Увеличенная скорость бега и свободный полёт)\n"
+        "• Godmode / Anti-Hit (Полное бессмертие и защита от чужих атак)\n"
+        "• Base Teleport & Safe Zone (Мгновенный телепорт на базу с лутом)\n"
+        "• Brainrot & Player ESP (Подсветка редких брейнротов и игроков)"
+    ),
+    "brainrot": (
+        "• Instant Auto Steal (Мгновенная кража брейнротов у всех игроков)\n"
+        "• Speed Boost & Fly Mode (Увеличенная скорость бега и свободный полёт)\n"
+        "• Godmode / Anti-Hit (Полное бессмертие и защита от чужих атак)\n"
+        "• Base Teleport & Safe Zone (Мгновенный телепорт на базу с лутом)\n"
+        "• Brainrot & Player ESP (Подсветка редких брейнротов и игроков)"
+    ),
     "murder mystery 2": (
         "• Murderer & Sheriff ESP (Подсветка ролей, дистанции и оружия)\n"
         "• Silent Aim & Auto Shoot (Скрытый аимбот по маньяку)\n"
