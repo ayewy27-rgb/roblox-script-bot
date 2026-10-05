@@ -36,6 +36,7 @@ import config
 import database
 import post_builder
 import script_finder
+import promo_generator
 
 # Timezone GMT+5
 TZ_GMT5 = timezone(timedelta(hours=5))
@@ -65,6 +66,9 @@ class AdminScriptSearch(StatesGroup):
     waiting_for_game_query = State()
 
 class UserScriptSuggest(StatesGroup):
+    waiting_for_game = State()
+
+class PromoCreation(StatesGroup):
     waiting_for_game = State()
 
 # Initialize Bot and Dispatcher
@@ -179,6 +183,8 @@ def get_admin_menu_keyboard() -> InlineKeyboardMarkup:
             [InlineKeyboardButton(text="📊 Ежедневный опрос в канал (12:00)", callback_data="admin_autopost_menu")],
             [InlineKeyboardButton(text="📢 Опубликовать Changelog в канал", callback_data="admin_post_changelog")],
             [InlineKeyboardButton(text="📌 Опубликовать шапку канала", callback_data="admin_post_header")],
+            [InlineKeyboardButton(text="🎬 Сценарий Shorts/TikTok для игры", callback_data="admin_promo_start")],
+            [InlineKeyboardButton(text="📖 Шпаргалка по монтажу Shorts", callback_data="promo_memo_show")],
             [InlineKeyboardButton(text="📢 Привязать Telegram-канал", callback_data="admin_set_channel")],
             [InlineKeyboardButton(text="📋 Список скриптов", callback_data="admin_list_scripts")],
         ]
@@ -472,6 +478,156 @@ async def callback_admin_panel(call: CallbackQuery):
         return
     await cleanup_user_search_messages(call.message.chat.id, user_id)
     await send_admin_panel(chat_id=call.message.chat.id, user_id=user_id)
+
+
+# --- ADMIN PROMO SCENARIO GENERATOR FLOW ---
+
+async def send_promo_scenario_card(chat_id: int, game_query: str):
+    channel = await database.get_setting("channel_id", config.CHANNEL_ID)
+    channel_clean = channel.replace("@", "") if channel else "script_drop"
+    promo = promo_generator.generate_promo(game_query, config.BOT_USERNAME, f"@{channel_clean}")
+
+    cycles_parts = []
+    for c in promo.get("cycles", []):
+        cycles_parts.append(
+            f"📍 <b>[{c['timing']}] — {c['stage']}</b>\n"
+            f"🎮 <b>Что снимать в игре:</b> {c['gameplay']}\n"
+            f"🔤 <b>Glow-текст:</b> <code>{c['glow_text']}</code>\n"
+            f"🗣 <b>Фраза озвучки:</b> <i>«{c['voice']}»</i>"
+        )
+    cycles_text = "\n\n".join(cycles_parts)
+
+    kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="📋 Скопировать всю озвучку (1 клик)", copy_text=CopyTextButton(text=promo["voiceover_text"]))],
+            [InlineKeyboardButton(text="📖 Шпаргалка по монтажу Shorts", callback_data="promo_memo_show")],
+            [InlineKeyboardButton(text="👑 В меню админа", callback_data="open_admin_panel")]
+        ]
+    )
+
+    text = (
+        f"🎬 <b>СЦЕНАРИЙ SHORTS / TIKTOK | {promo['game_name'].upper()}</b>\n"
+        "━━━━━━━━━━━━━━━━━━━━━\n"
+        f"⏱ <b>Хронометраж:</b> {promo['duration']} (вирусный retention)\n"
+        f"🔤 <b>Главный Glow-заголовок (0–3 сек):</b>\n"
+        f"«<b>{promo['onscreen_text']}</b>»\n\n"
+        "🎙 <b>ПОЛНЫЙ ТЕКСТ ОЗВУЧКИ (ДЛЯ CAPCUT):</b>\n"
+        "<i>(нажмите на блок ниже или кнопку, чтобы скопировать в буфер)</i>:\n\n"
+        f"<code>{html.escape(promo['voiceover_text'])}</code>\n\n"
+        "🎬 <b>ПОСЕКУНДНЫЕ ТАЙМЦИКЛЫ (ЧТО ДЕЛАТЬ):</b>\n\n"
+        f"{cycles_text}\n\n"
+        "⚙️ <b>НАСТРОЙКИ CAPCUT (диск D):</b>\n"
+        f"• <b>Озвучка:</b> {promo['capcut_settings']['voice']}\n"
+        f"• <b>Субтитры:</b> {promo['capcut_settings']['captions']}\n"
+        f"• <b>Фон:</b> {promo['capcut_settings']['music']}\n\n"
+        f"🏷 <b>Хештеги для рекомендаций:</b>\n<code>{promo['tags']}</code>"
+    )
+    await bot.send_message(chat_id=chat_id, text=text, reply_markup=kb)
+
+@dp.callback_query(F.data == "promo_memo_show")
+async def show_promo_memo(call: CallbackQuery):
+    if not await is_admin(call.from_user.id):
+        await call.answer("⛔ Нет доступа", show_alert=True)
+        return
+    await call.answer()
+    memo_text = (
+        "⚡ <b>ШПАРГАЛКА: КАК ДЕЛАТЬ ВИРУСНЫЕ SHORTS ЗА 60 СЕКУНД</b>\n"
+        "━━━━━━━━━━━━━━━━━━━━━\n\n"
+        "1️⃣ <b>СНЯТЬ ФУТАЖ В ИГРЕ (12-14 сек):</b>\n"
+        "• 0–3 сек: Бежишь/прыгаешь в хабе (хук внимания).\n"
+        "• 3–7 сек: Открываешь чит, кликаешь авто-фарм (монеты/киллы летят сами).\n"
+        "• 7–10 сек: Показываешь, что античит не кикает, всё плавно.\n"
+        "• 10–13 сек: Показываешь пост в ТГ со скриптом + стрелка на шапку.\n\n"
+        "2️⃣ <b>ОЗВУЧКА В CAPCUT (ДИСК D):</b>\n"
+        "• Закидываешь 12-сек видео на таймлайн.\n"
+        "• Жмешь <b>«Текст» → вставляешь скопированный текст из бота</b>.\n"
+        "• Справа жмешь <b>«Текст в речь»</b> → голос <b>Русский → «Энергичный парень»</b>.\n\n"
+        "3️⃣ <b>НЕОНОВЫЕ СУБТИТРЫ (GLOW):</b>\n"
+        "• Жмешь <b>«Автосубтитры»</b> → шаблон <b>«Glow / Свечение»</b>.\n"
+        "• CapCut сам расставит светящиеся слова точно под голос!\n\n"
+        "4️⃣ <b>ФОН И ЭКСПОРТ:</b>\n"
+        "• Кидаешь тихий фонк на фон (громкость <b>-18 dB</b>).\n"
+        "• Экспорт: 1080x1920 (9:16), 60 FPS — и заливаешь в TikTok/Shorts!\n\n"
+        "📁 <i>Файл с памяткой также сохранён на диске D:\n<code>D:\\CapCut_Setup\\ПАМЯТКА_МОНТАЖА_SHORTS.txt</code></i>"
+    )
+    kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="🎬 Сгенерировать сценарий", callback_data="admin_promo_start")],
+            [InlineKeyboardButton(text="👑 В меню админа", callback_data="open_admin_panel")]
+        ]
+    )
+    await call.message.answer(memo_text, reply_markup=kb)
+
+@dp.message(Command("memo"))
+@dp.message(Command("shorts"))
+async def handle_memo_command(message: Message):
+    user_id = message.from_user.id if message.from_user else 0
+    if not await is_admin(user_id):
+        return
+    memo_text = (
+        "⚡ <b>ШПАРГАЛКА: КАК ДЕЛАТЬ ВИРУСНЫЕ SHORTS ЗА 60 СЕКУНД</b>\n"
+        "━━━━━━━━━━━━━━━━━━━━━\n\n"
+        "1️⃣ <b>СНЯТЬ ФУТАЖ В ИГРЕ (12-14 сек):</b>\n"
+        "• 0–3 сек: Бежишь/прыгаешь в хабе (хук внимания).\n"
+        "• 3–7 сек: Открываешь чит, кликаешь авто-фарм (монеты/киллы летят сами).\n"
+        "• 7–10 сек: Показываешь, что античит не кикает, всё плавно.\n"
+        "• 10–13 сек: Показываешь пост в ТГ со скриптом + стрелка на шапку.\n\n"
+        "2️⃣ <b>ОЗВУЧКА В CAPCUT (ДИСК D):</b>\n"
+        "• Закидываешь 12-сек видео на таймлайн.\n"
+        "• Жмешь <b>«Текст» → вставляешь скопированный текст из бота</b>.\n"
+        "• Справа жмешь <b>«Текст в речь»</b> → голос <b>Русский → «Энергичный парень»</b>.\n\n"
+        "3️⃣ <b>НЕОНОВЫЕ СУБТИТРЫ (GLOW):</b>\n"
+        "• Жмешь <b>«Автосубтитры»</b> → шаблон <b>«Glow / Свечение»</b>.\n"
+        "• CapCut сам расставит светящиеся слова точно под голос!\n\n"
+        "4️⃣ <b>ФОН И ЭКСПОРТ:</b>\n"
+        "• Кидаешь тихий фонк на фон (громкость <b>-18 dB</b>).\n"
+        "• Экспорт: 1080x1920 (9:16), 60 FPS — и заливаешь в TikTok/Shorts!\n\n"
+        "📁 <i>Файл с памяткой также сохранён на диске D:\n<code>D:\\CapCut_Setup\\ПАМЯТКА_МОНТАЖА_SHORTS.txt</code></i>"
+    )
+    kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="🎬 Сгенерировать сценарий", callback_data="admin_promo_start")],
+            [InlineKeyboardButton(text="👑 В меню админа", callback_data="open_admin_panel")]
+        ]
+    )
+    await message.answer(memo_text, reply_markup=kb)
+
+@dp.callback_query(F.data == "admin_promo_start")
+async def start_promo_scenario(call: CallbackQuery, state: FSMContext):
+    if not await is_admin(call.from_user.id):
+        await call.answer("⛔ Нет доступа", show_alert=True)
+        return
+    await call.answer()
+    await state.set_state(PromoCreation.waiting_for_game)
+    cancel_kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="❌ Отмена", callback_data="cancel_fsm")]])
+    await call.message.answer(
+        "🎬 <b>Генератор сценариев для TikTok / YouTube Shorts</b>\n\n"
+        "Напишите название игры (например: <code>Steal an Egg</code> или <code>Blox Fruits</code>), "
+        "и бот мгновенно составит полный сценарий, текст для авто-озвучки в CapCut и настройки глоу-субтитров!",
+        reply_markup=cancel_kb
+    )
+
+@dp.message(PromoCreation.waiting_for_game)
+async def process_promo_game_input(message: Message, state: FSMContext):
+    await state.clear()
+    game_query = message.text.strip()
+    await send_promo_scenario_card(message.chat.id, game_query)
+
+@dp.message(Command("promo"))
+async def handle_promo_command(message: Message, command: CommandObject):
+    user_id = message.from_user.id if message.from_user else 0
+    if not await is_admin(user_id):
+        return
+    game_query = command.args.strip() if command.args else ""
+    if not game_query:
+        await message.answer(
+            "🎬 <b>Генератор сценариев Shorts / TikTok</b>\n\n"
+            "Напишите: <code>/promo Название игры</code>\n"
+            "Пример: <code>/promo Steal an Egg</code>"
+        )
+        return
+    await send_promo_scenario_card(message.chat.id, game_query)
+
 
 # --- FSM: MANUAL POST CREATION ---
 
@@ -1019,7 +1175,7 @@ async def send_search_results_page(target, user_id: int, page: int = 0):
     header_text = (
         f"⚡ <b>НАЙДЕНО СКРИПТОВ БЕЗ КЛЮЧЕЙ (3 СЕРВЕРА): {total_results}</b> ⚡\n"
         f"━━━━━━━━━━━━━━━━━━━━━\n"
-        f"📡 <i>Источники: ScriptBlox Core, ScriptBlox Feed, GitHub Lua Engine</i>\n\n"
+        f"📡 <i>Источники: ScriptBlox Core, ScriptBlox Feed, Community Verified Hubs</i>\n\n"
         f"📖 Показаны скрипты <b>#{start_idx + 1}–#{end_idx}</b> из <b>{total_results}</b> (Страница {page + 1}/{total_pages})\n"
         f"Выберите действие под нужным читом или перелистните дальше:"
     )
@@ -1119,7 +1275,7 @@ async def perform_search_and_display(chat_id: int, user_id: int, query: str, sen
     # Clean previous search cards to keep chat clean
     await cleanup_user_search_messages(chat_id, user_id)
 
-    status_msg = await send_target.answer(f"⏳ <b>Ищу по 3 серверам скриптов (ScriptBlox Core, Feed, GitHub) для «{html.escape(query)}»...</b>")
+    status_msg = await send_target.answer(f"⏳ <b>Ищу по 3 серверам скриптов (ScriptBlox Core, Feed, Community Hubs) для «{html.escape(query)}»...</b>")
     results = await script_finder.search_scripts_online(query, user_id=user_id)
     try:
         await status_msg.delete()

@@ -1060,91 +1060,37 @@ def _fetch_scriptblox_feed_sync(query: str, kws: List[str], max_pages: int = 2) 
 
     return feed_scripts
 
-def _fetch_github_scripts_sync(query: str, kws: List[str], max_repos: int = 4) -> List[Dict[str, Any]]:
-    """Server 3: GitHub Open-Source Lua Repositories & Raw Loaders Engine."""
-    github_scripts: List[Dict[str, Any]] = []
-    clean_q = query.strip()
-    encoded_q = urllib.parse.quote(f"roblox script {clean_q}")
-    url = f"https://api.github.com/search/repositories?q={encoded_q}&sort=stars&per_page={max_repos}"
+def _fetch_community_trending_sync(query: str, kws: List[str], max_pages: int = 3) -> List[Dict[str, Any]]:
+    """Server 3: Community Trending & Verified Lua Hubs Feed (Zero GitHub)."""
+    community_scripts: List[Dict[str, Any]] = []
+    clean_q = query.strip().lower()
 
-    try:
-        req = urllib.request.Request(
-            url,
-            headers={
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-                "Accept": "application/vnd.github.v3+json"
-            }
-        )
-        with urllib.request.urlopen(req, timeout=3.5) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
-            items = data.get("items", [])
-    except Exception as e:
-        logger.debug(f"GitHub repository search error for '{query}': {e}")
-        return []
-
-    for item in items:
-        full_name = item.get("full_name")
-        branch = item.get("default_branch", "main")
-        desc = item.get("description") or ""
-        stars = item.get("stargazers_count", 0)
-        repo_name = item.get("name", "Roblox Script")
-
-        # 1. Inspect repo contents for .lua files
-        contents_url = f"https://api.github.com/repos/{full_name}/contents"
-        found_lua = False
+    for page in range(2, 2 + max_pages):
+        url = f"https://scriptblox.com/api/script/fetch?page={page}&max=25"
         try:
-            c_req = urllib.request.Request(contents_url, headers={"User-Agent": "Mozilla/5.0", "Accept": "application/vnd.github.v3+json"})
-            with urllib.request.urlopen(c_req, timeout=2.0) as c_resp:
-                files = json.loads(c_resp.read().decode("utf-8"))
-                if isinstance(files, list):
-                    lua_files = [f for f in files if isinstance(f, dict) and f.get("name", "").endswith(".lua")]
-                    for lf in lua_files[:2]:
-                        raw_url = lf.get("download_url") or f"https://raw.githubusercontent.com/{full_name}/{branch}/{lf.get('name')}"
-                        loadstring_code = f'loadstring(game:HttpGet("{raw_url}"))()'
-                        found_lua = True
-                        clean_title = f"{repo_name} | {lf.get('name')} [GitHub]"
-                        github_scripts.append({
-                            "title": clean_title,
-                            "game": {"name": clean_q.title()},
-                            "script": loadstring_code,
-                            "likeCount": stars,
-                            "verified": stars >= 5,
-                            "key": False,
-                            "isHub": False,
-                            "_is_keyless": True,
-                            "_source_server": f"GitHub Open-Source ({stars} ⭐)",
-                            "createdAt": item.get("updated_at", "2025")
-                        })
-        except Exception:
-            pass
+            req = urllib.request.Request(
+                url,
+                headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+            )
+            with urllib.request.urlopen(req, timeout=3.5) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+                result_data = data.get("result", {})
+                scripts = result_data.get("scripts", []) if isinstance(result_data, dict) else []
+                for s in scripts:
+                    g_info = s.get("game", {})
+                    g_name = (g_info.get("name") or "").lower()
+                    title = (s.get("title") or "").lower()
 
-        # 2. If no .lua files at root, inspect README for loadstring
-        if not found_lua:
-            readme_url = f"https://raw.githubusercontent.com/{full_name}/{branch}/README.md"
-            try:
-                r_req = urllib.request.Request(readme_url, headers={"User-Agent": "Mozilla/5.0"})
-                with urllib.request.urlopen(r_req, timeout=2.0) as r_resp:
-                    readme_text = r_resp.read().decode("utf-8", errors="ignore")
-                    matches = re.findall(r'loadstring\(game:HttpGet\(["\']([^"\']+)["\']\)\)\(\)', readme_text)
-                    if matches:
-                        raw_link = matches[0]
-                        loadstring_code = f'loadstring(game:HttpGet("{raw_link}"))()'
-                        github_scripts.append({
-                            "title": f"{repo_name} [GitHub]",
-                            "game": {"name": clean_q.title()},
-                            "script": loadstring_code,
-                            "likeCount": stars,
-                            "verified": stars >= 5,
-                            "key": False,
-                            "isHub": False,
-                            "_is_keyless": True,
-                            "_source_server": f"GitHub Open-Source ({stars} ⭐)",
-                            "createdAt": item.get("updated_at", "2025")
-                        })
-            except Exception:
-                pass
+                    matched = clean_q in g_name or clean_q in title or any(kw in g_name or kw in title for kw in kws if len(kw) >= 4)
+                    if matched:
+                        s_copy = dict(s)
+                        s_copy["_source_server"] = "Community Verified Feed"
+                        community_scripts.append(s_copy)
+        except Exception as e:
+            logger.debug(f"Community feed page {page} error: {e}")
+            break
 
-    return github_scripts
+    return community_scripts
 
 # ======================================================================================
 # 9. MAIN MULTI-SERVER ONLINE SEARCH ENGINE (3 SERVERS CONCURRENT)
@@ -1215,10 +1161,10 @@ async def search_scripts_online(
     # 4. Multi-Server Concurrent Search (3 Independent Servers Concurrently!)
     # Server 1: ScriptBlox Core Search API (multi-page query)
     # Server 2: ScriptBlox Live Trending & Fresh Community Feed
-    # Server 3: GitHub Open-Source Lua Repositories Engine
+    # Server 3: Community Trending & Verified Lua Hubs Feed
     server1_tasks = [loop.run_in_executor(None, _fetch_scriptblox_sync, q, 2) for q in search_queries[:3]]
     server2_task = loop.run_in_executor(None, _fetch_scriptblox_feed_sync, clean_query, kws, 2)
-    server3_task = loop.run_in_executor(None, _fetch_github_scripts_sync, clean_query, kws, 4)
+    server3_task = loop.run_in_executor(None, _fetch_community_trending_sync, clean_query, kws, 3)
 
     all_server_results = await asyncio.gather(*server1_tasks, server2_task, server3_task, return_exceptions=True)
 
