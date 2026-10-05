@@ -2,13 +2,24 @@ import aiosqlite
 import json
 import re
 import logging
-from typing import Optional, List, Dict, Any
+import hashlib
+import time
+from typing import Optional, List, Dict, Any, Set
 from pathlib import Path
-from config import DB_PATH, SCRIPTS_STORE_PATH
+from config import DB_PATH, SCRIPTS_STORE_PATH, SHOWN_HISTORY_PATH
 
 logger = logging.getLogger(__name__)
 
 DEFAULT_EXECUTORS = "ПК и Мобильные (Delta, Arceus X, Fluxus, Codex, Solara)"
+
+def hash_script_code(code: str) -> str:
+    """Computes deterministic MD5 hash of normalized script code."""
+    safe_code = str(code or "").strip()
+    cleaned = re.sub(r'[\s\(\)\"\']+', '', safe_code.lower())
+    match = re.search(r'https?://[^\s\"\'\)]+', safe_code)
+    if match:
+        cleaned = re.sub(r'https?://', '', match.group(0).lower().strip())
+    return hashlib.md5(cleaned.encode("utf-8")).hexdigest()
 
 def _read_scripts_store() -> Dict[str, Any]:
     """Reads scripts from persistent JSON file."""
@@ -28,6 +39,35 @@ def _write_scripts_store(data: Dict[str, Any]):
             json.dump(data, f, ensure_ascii=False, indent=2)
     except Exception as e:
         logger.error(f"Error writing scripts_store.json: {e}")
+
+def _read_shown_history() -> Dict[str, List[Dict[str, Any]]]:
+    """Reads shown scripts history from persistent JSON file across container reboots."""
+    if not SHOWN_HISTORY_PATH.exists():
+        return {}
+    try:
+        with open(SHOWN_HISTORY_PATH, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception as e:
+        logger.error(f"Error reading shown_history.json: {e}")
+        return {}
+
+def _write_shown_history(data: Dict[str, List[Dict[str, Any]]]):
+    """Persists shown scripts history to JSON file across container rebuilds."""
+    try:
+        with open(SHOWN_HISTORY_PATH, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        logger.error(f"Error writing shown_history.json: {e}")
+
+def get_all_stored_script_hashes() -> Set[str]:
+    """Returns a set of MD5 hashes for all scripts currently stored in the database / scripts_store.json."""
+    store = _read_scripts_store()
+    hashes = set()
+    for item in store.values():
+        code = item.get("script_code", "")
+        if code:
+            hashes.add(hash_script_code(code))
+    return hashes
 
 async def init_db():
     async with aiosqlite.connect(DB_PATH) as db:
@@ -131,6 +171,37 @@ async def init_db():
                     item.get("channel_message_id"),
                     item.get("created_at")
                 ))
+
+        # Synchronize from persistent shown_history.json into SQLite
+        history_data = _read_shown_history()
+        if history_data:
+            cutoff = time.time() - (14 * 86400)
+            cleaned_history = {}
+            for uid_str, entries in history_data.items():
+                valid_entries = []
+                for entry in entries:
+                    ts = entry.get("timestamp", 0)
+                    if ts >= cutoff:
+                        valid_entries.append(entry)
+                        try:
+                            uid = int(uid_str)
+                            h = entry.get("hash", "")
+                            g = entry.get("game", "")
+                            shown_time = entry.get("shown_at") or time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(ts))
+                            async with db.execute(
+                                "SELECT 1 FROM shown_scripts_history WHERE user_id = ? AND script_hash = ? LIMIT 1",
+                                (uid, h)
+                            ) as check_cur:
+                                if not await check_cur.fetchone():
+                                    await db.execute(
+                                        "INSERT INTO shown_scripts_history (user_id, script_hash, game_name, shown_at) VALUES (?, ?, ?, ?)",
+                                        (uid, h, g, shown_time)
+                                    )
+                        except Exception:
+                            pass
+                if valid_entries:
+                    cleaned_history[uid_str] = valid_entries
+            _write_shown_history(cleaned_history)
 
         await db.commit()
 
@@ -241,6 +312,13 @@ async def add_script(
     """Adds a script to both SQLite and persistent JSON store with collision prevention."""
     slug = re.sub(r'[^a-z0-9]', '', game_name.lower())
     store = _read_scripts_store()
+
+    # Deduplication: check if exact script code already exists in store
+    code_hash = hash_script_code(script_code)
+    for k, v in store.items():
+        if hash_script_code(v.get("script_code", "")) == code_hash:
+            logger.info(f"Script code already exists in store with key '{k}'. Reusing key.")
+            return k
 
     if not custom_key:
         max_k = 0
@@ -488,21 +566,15 @@ async def get_script_request_stats() -> Dict[str, Any]:
             "top_games": top_games,
         }
 
-import hashlib
-
-def hash_script_code(code: str) -> str:
-    """Computes deterministic MD5 hash of normalized script code."""
-    safe_code = str(code or "").strip()
-    cleaned = re.sub(r'[\s\(\)\"\']+', '', safe_code.lower())
-    match = re.search(r'https?://[^\s\"\'\)]+', safe_code)
-    if match:
-        cleaned = re.sub(r'https?://', '', match.group(0).lower().strip())
-    return hashlib.md5(cleaned.encode("utf-8")).hexdigest()
-
 async def record_shown_scripts(user_id: int, script_codes: List[str], game_name: str = ""):
     """Records that these scripts were shown to this user/admin to avoid repetition for 7 days."""
     if not user_id or not script_codes:
         return
+    now_ts = time.time()
+    now_iso = time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(now_ts))
+    cutoff_ts = now_ts - (14 * 86400)
+
+    # 1. Update SQLite
     try:
         async with aiosqlite.connect(DB_PATH) as db:
             for code in script_codes:
@@ -510,8 +582,8 @@ async def record_shown_scripts(user_id: int, script_codes: List[str], game_name:
                     continue
                 h = hash_script_code(code)
                 await db.execute(
-                    "INSERT INTO shown_scripts_history (user_id, script_hash, game_name) VALUES (?, ?, ?)",
-                    (user_id, h, game_name or "")
+                    "INSERT INTO shown_scripts_history (user_id, script_hash, game_name, shown_at) VALUES (?, ?, ?, ?)",
+                    (user_id, h, game_name or "", now_iso)
                 )
             # Auto-prune records older than 14 days to keep database compact & fast
             await db.execute("DELETE FROM shown_scripts_history WHERE shown_at < datetime('now', '-14 days')")
@@ -519,10 +591,33 @@ async def record_shown_scripts(user_id: int, script_codes: List[str], game_name:
     except Exception as e:
         logger.warning(f"Error recording shown scripts in SQLite: {e}")
 
-async def get_recently_shown_hashes(user_id: int, days: int = 7) -> set:
+    # 2. Update persistent JSON store (survives any Render / container reboot)
+    try:
+        history_data = _read_shown_history()
+        uid_key = str(user_id)
+        user_list = history_data.get(uid_key, [])
+        for code in script_codes:
+            if not code:
+                continue
+            h = hash_script_code(code)
+            user_list.append({
+                "hash": h,
+                "game": game_name or "",
+                "timestamp": now_ts,
+                "shown_at": now_iso
+            })
+        history_data[uid_key] = [e for e in user_list if e.get("timestamp", 0) >= cutoff_ts]
+        _write_shown_history(history_data)
+    except Exception as e:
+        logger.warning(f"Error recording shown scripts in JSON: {e}")
+
+async def get_recently_shown_hashes(user_id: int, days: int = 7) -> Set[str]:
     """Returns set of script hashes shown to this user within the last N days."""
     if not user_id:
         return set()
+    hashes: Set[str] = set()
+
+    # 1. Fetch from SQLite
     try:
         async with aiosqlite.connect(DB_PATH) as db:
             async with db.execute(
@@ -530,10 +625,27 @@ async def get_recently_shown_hashes(user_id: int, days: int = 7) -> set:
                 (user_id, f"-{days} days")
             ) as cursor:
                 rows = await cursor.fetchall()
-                return {r[0] for r in rows}
+                for r in rows:
+                    if r[0]:
+                        hashes.add(r[0])
     except Exception as e:
-        logger.warning(f"Error fetching recently shown hashes for {user_id}: {e}")
-        return set()
+        logger.warning(f"Error fetching recently shown hashes from SQLite for {user_id}: {e}")
+
+    # 2. Fetch from persistent JSON store (fallback & container reboot safety)
+    try:
+        history_data = _read_shown_history()
+        uid_key = str(user_id)
+        user_list = history_data.get(uid_key, [])
+        cutoff_ts = time.time() - (days * 86400)
+        for e in user_list:
+            if e.get("timestamp", 0) >= cutoff_ts:
+                h = e.get("hash")
+                if h:
+                    hashes.add(h)
+    except Exception as e:
+        logger.warning(f"Error fetching recently shown hashes from JSON for {user_id}: {e}")
+
+    return hashes
 
 async def clear_shown_history(user_id: int, game_name: Optional[str] = None):
     """Allows user/admin to reset their 7-day memory cache if they want to view all scripts again."""
@@ -550,6 +662,19 @@ async def clear_shown_history(user_id: int, game_name: Optional[str] = None):
                 await db.execute("DELETE FROM shown_scripts_history WHERE user_id = ?", (user_id,))
             await db.commit()
     except Exception as e:
-        logger.warning(f"Error clearing shown history for {user_id}: {e}")
+        logger.warning(f"Error clearing shown history in SQLite for {user_id}: {e}")
+
+    try:
+        history_data = _read_shown_history()
+        uid_key = str(user_id)
+        if uid_key in history_data:
+            if game_name:
+                low = game_name.lower().strip()
+                history_data[uid_key] = [e for e in history_data[uid_key] if low not in e.get("game", "").lower()]
+            else:
+                history_data.pop(uid_key, None)
+            _write_shown_history(history_data)
+    except Exception as e:
+        logger.warning(f"Error clearing shown history in JSON for {user_id}: {e}")
 
 

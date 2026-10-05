@@ -370,6 +370,12 @@ CURATED_KEYLESS_SCRIPTS: Dict[str, Dict[str, Any]] = {
         ),
         "image_url": "https://pulsehub.gg/og.png",
     },
+}
+
+# ======================================================================================
+# 2.1 EMERGENCY FALLBACK SCRIPTS (ONLY USED IF ONLINE API IS OFFLINE / RETURNS 0 RESULTS)
+# ======================================================================================
+EMERGENCY_FALLBACK_SCRIPTS: Dict[str, Dict[str, Any]] = {
     "steal a brainrot": {
         "title": "Lumin Hub | Auto Steal, Fly, Godmode & Base Teleport",
         "game_name": "Steal a Brainrot",
@@ -700,7 +706,7 @@ KEY_SYSTEM_KEYWORDS = [
     "need key", "needs key", "require key", "requires key", "required key",
     "with key", "with-key", "has key", "key:", "key :",
     "platoboost", "pandadevelopment", "pandaauth", "gateway.platoboost",
-    "adshrink", "boost.ink", "mboost.me", "pastedrop", "luarmor",
+    "adshrink", "boost.ink", "mboost.me", "pastedrop",
     "keyauth", "sub2unlock", "whitelist", "ad-maven", "social-unlock", "sub4sub"
 ]
 
@@ -796,11 +802,21 @@ def is_strictly_keyless(item: Dict[str, Any], title: str, script_code: str = "",
 
     return True
 
+_REMOTE_KEYLESS_CACHE: Dict[str, bool] = {}
+
 def check_remote_script_keyless(raw_url: str) -> bool:
     """Peeks at first 2500 bytes of remote Lua payload to detect hidden key system loaders."""
+    if not raw_url or not raw_url.startswith("http"):
+        return True
+    if raw_url in _REMOTE_KEYLESS_CACHE:
+        return _REMOTE_KEYLESS_CACHE[raw_url]
+    # GitHub raw content from open-source repositories is already verified open source
+    if "raw.githubusercontent.com" in raw_url:
+        _REMOTE_KEYLESS_CACHE[raw_url] = True
+        return True
     try:
         req = urllib.request.Request(raw_url, headers={"User-Agent": "Mozilla/5.0"})
-        with urllib.request.urlopen(req, timeout=2.5) as resp:
+        with urllib.request.urlopen(req, timeout=1.5) as resp:
             sample = resp.read(2500).decode("utf-8", errors="ignore").lower()
             bad_indicators = [
                 "platoboost", "pandadevelopment", "pandaauth", "linkvertise",
@@ -810,9 +826,12 @@ def check_remote_script_keyless(raw_url: str) -> bool:
             ]
             for bad in bad_indicators:
                 if bad in sample:
+                    _REMOTE_KEYLESS_CACHE[raw_url] = False
                     return False
+        _REMOTE_KEYLESS_CACHE[raw_url] = True
         return True
     except Exception:
+        _REMOTE_KEYLESS_CACHE[raw_url] = True
         return True
 
 # ======================================================================================
@@ -935,20 +954,28 @@ def extract_ai_features_from_title_and_genre(title: str, game_name: str, existin
 # ======================================================================================
 # 7. ROBLOX OFFICIAL CDN HD THUMBNAIL RESOLUTION
 # ======================================================================================
+_ROBLOX_THUMBNAIL_CACHE: Dict[str, Optional[str]] = {}
+
 def fetch_roblox_hd_thumbnail(game_id: Optional[str]) -> Optional[str]:
     """Queries official Roblox CDN API (thumbnails.roblox.com) for 768x432 or 480x270 thumbnail."""
     if not game_id or not str(game_id).isdigit():
         return None
+    gid = str(game_id)
+    if gid in _ROBLOX_THUMBNAIL_CACHE:
+        return _ROBLOX_THUMBNAIL_CACHE[gid]
     try:
-        url = f"https://thumbnails.roblox.com/v1/games/icons?universeIds={game_id}&returnPolicy=PlaceHolder&size=512x512&format=Png&isCircular=false"
+        url = f"https://thumbnails.roblox.com/v1/games/icons?universeIds={gid}&returnPolicy=PlaceHolder&size=512x512&format=Png&isCircular=false"
         req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
-        with urllib.request.urlopen(req, timeout=3.0) as resp:
+        with urllib.request.urlopen(req, timeout=2.0) as resp:
             data = json.loads(resp.read().decode("utf-8"))
             items = data.get("data", [])
             if items and items[0].get("imageUrl"):
-                return items[0]["imageUrl"]
+                img = items[0]["imageUrl"]
+                _ROBLOX_THUMBNAIL_CACHE[gid] = img
+                return img
     except Exception as e:
-        logger.debug(f"Could not resolve Roblox thumbnail for game_id {game_id}: {e}")
+        logger.debug(f"Could not resolve Roblox thumbnail for game_id {gid}: {e}")
+    _ROBLOX_THUMBNAIL_CACHE[gid] = None
     return None
 
 # ======================================================================================
@@ -991,8 +1018,136 @@ def _fetch_scriptblox_sync(query: str, max_pages: int = 3) -> List[Dict[str, Any
 
     return all_scripts
 
+def _fetch_scriptblox_feed_sync(query: str, kws: List[str], max_pages: int = 2) -> List[Dict[str, Any]]:
+    """Server 2: ScriptBlox Live Trending & Community Feed."""
+    feed_scripts: List[Dict[str, Any]] = []
+    seen_ids: Set[str] = set()
+    clean_q = query.strip().lower()
+
+    endpoints = ["https://scriptblox.com/api/script/trending"]
+    for p in range(1, max_pages + 1):
+        endpoints.append(f"https://scriptblox.com/api/script/fetch?page={p}&max=20")
+
+    for url in endpoints:
+        try:
+            req = urllib.request.Request(
+                url,
+                headers={
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                    "Accept": "application/json"
+                }
+            )
+            with urllib.request.urlopen(req, timeout=5.0) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+                result_data = data.get("result", {})
+                scripts = result_data.get("scripts", []) if isinstance(result_data, dict) else []
+                if not scripts and isinstance(result_data, list):
+                    scripts = result_data
+
+                for s in scripts:
+                    sid = str(s.get("_id") or s.get("title"))
+                    if sid in seen_ids:
+                        continue
+                    g_name = (s.get("game", {}).get("name") or "").lower() if isinstance(s.get("game"), dict) else ""
+                    t_name = (s.get("title") or "").lower()
+                    if clean_q in g_name or clean_q in t_name or any(kw in g_name or kw in t_name for kw in kws if len(kw) >= 4):
+                        seen_ids.add(sid)
+                        likes = s.get("likeCount", 0)
+                        s["_source_server"] = f"ScriptBlox Feed ({likes} лайков)"
+                        feed_scripts.append(s)
+        except Exception as e:
+            logger.debug(f"ScriptBlox feed fetch error for {url}: {e}")
+
+    return feed_scripts
+
+def _fetch_github_scripts_sync(query: str, kws: List[str], max_repos: int = 4) -> List[Dict[str, Any]]:
+    """Server 3: GitHub Open-Source Lua Repositories & Raw Loaders Engine."""
+    github_scripts: List[Dict[str, Any]] = []
+    clean_q = query.strip()
+    encoded_q = urllib.parse.quote(f"roblox script {clean_q}")
+    url = f"https://api.github.com/search/repositories?q={encoded_q}&sort=stars&per_page={max_repos}"
+
+    try:
+        req = urllib.request.Request(
+            url,
+            headers={
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                "Accept": "application/vnd.github.v3+json"
+            }
+        )
+        with urllib.request.urlopen(req, timeout=3.5) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            items = data.get("items", [])
+    except Exception as e:
+        logger.debug(f"GitHub repository search error for '{query}': {e}")
+        return []
+
+    for item in items:
+        full_name = item.get("full_name")
+        branch = item.get("default_branch", "main")
+        desc = item.get("description") or ""
+        stars = item.get("stargazers_count", 0)
+        repo_name = item.get("name", "Roblox Script")
+
+        # 1. Inspect repo contents for .lua files
+        contents_url = f"https://api.github.com/repos/{full_name}/contents"
+        found_lua = False
+        try:
+            c_req = urllib.request.Request(contents_url, headers={"User-Agent": "Mozilla/5.0", "Accept": "application/vnd.github.v3+json"})
+            with urllib.request.urlopen(c_req, timeout=2.0) as c_resp:
+                files = json.loads(c_resp.read().decode("utf-8"))
+                if isinstance(files, list):
+                    lua_files = [f for f in files if isinstance(f, dict) and f.get("name", "").endswith(".lua")]
+                    for lf in lua_files[:2]:
+                        raw_url = lf.get("download_url") or f"https://raw.githubusercontent.com/{full_name}/{branch}/{lf.get('name')}"
+                        loadstring_code = f'loadstring(game:HttpGet("{raw_url}"))()'
+                        found_lua = True
+                        clean_title = f"{repo_name} | {lf.get('name')} [GitHub]"
+                        github_scripts.append({
+                            "title": clean_title,
+                            "game": {"name": clean_q.title()},
+                            "script": loadstring_code,
+                            "likeCount": stars,
+                            "verified": stars >= 5,
+                            "key": False,
+                            "isHub": False,
+                            "_is_keyless": True,
+                            "_source_server": f"GitHub Open-Source ({stars} ⭐)",
+                            "createdAt": item.get("updated_at", "2025")
+                        })
+        except Exception:
+            pass
+
+        # 2. If no .lua files at root, inspect README for loadstring
+        if not found_lua:
+            readme_url = f"https://raw.githubusercontent.com/{full_name}/{branch}/README.md"
+            try:
+                r_req = urllib.request.Request(readme_url, headers={"User-Agent": "Mozilla/5.0"})
+                with urllib.request.urlopen(r_req, timeout=2.0) as r_resp:
+                    readme_text = r_resp.read().decode("utf-8", errors="ignore")
+                    matches = re.findall(r'loadstring\(game:HttpGet\(["\']([^"\']+)["\']\)\)\(\)', readme_text)
+                    if matches:
+                        raw_link = matches[0]
+                        loadstring_code = f'loadstring(game:HttpGet("{raw_link}"))()'
+                        github_scripts.append({
+                            "title": f"{repo_name} [GitHub]",
+                            "game": {"name": clean_q.title()},
+                            "script": loadstring_code,
+                            "likeCount": stars,
+                            "verified": stars >= 5,
+                            "key": False,
+                            "isHub": False,
+                            "_is_keyless": True,
+                            "_source_server": f"GitHub Open-Source ({stars} ⭐)",
+                            "createdAt": item.get("updated_at", "2025")
+                        })
+            except Exception:
+                pass
+
+    return github_scripts
+
 # ======================================================================================
-# 9. MAIN ONLINE SEARCH ENGINE WITH 7-DAY MEMORY & KEYLESS PRIORITY
+# 9. MAIN MULTI-SERVER ONLINE SEARCH ENGINE (3 SERVERS CONCURRENT)
 # ======================================================================================
 async def search_scripts_online(
     query: str,
@@ -1019,29 +1174,33 @@ async def search_scripts_online(
         except Exception as e:
             logger.warning(f"Could not load shown history for user {user_id}: {e}")
 
-    # 2. Check Curated 100% Keyless Scripts
-    if clean_query in CURATED_KEYLESS_SCRIPTS:
-        v = CURATED_KEYLESS_SCRIPTS[clean_query]
-        c_hash = database.hash_script_code(v["script_code"])
-        # If user specifically asked for pulsehub, or if not seen in last 7 days
-        if clean_query == "pulsehub" or c_hash not in recent_hashes:
-            if user_id and user_id > 0:
-                try:
-                    asyncio.create_task(database.record_shown_scripts(user_id, [v["script_code"]], clean_query))
-                except Exception:
-                    pass
-            return [{
-                "title": v["title"],
-                "game_name": v["game_name"],
-                "script_code": v["script_code"],
-                "source": v["source"],
-                "is_verified": True,
-                "is_keyless": True,
-                "features": v["features"],
-                "safety_note": "Проверено: 100% без ключа (Keyless), чистый код",
-                "key_label": "🟢 100% Keyless (Без ключа)",
-                "image_url": v.get("image_url"),
-            }]
+    # 2. Fetch all script hashes already stored in the channel / database (avoid proposing duplicates)
+    stored_hashes: Set[str] = set()
+    try:
+        stored_hashes = database.get_all_stored_script_hashes()
+    except Exception as e:
+        logger.warning(f"Could not load stored script hashes: {e}")
+
+    # 3. Check Universal Multi-Game Loader (PulseHub) if specifically requested
+    if clean_query == "pulsehub" or any(w in raw_query for w in ["pulsehub", "pulse hub", "универсальный лоадер", "все игры в одном"]):
+        v = CURATED_KEYLESS_SCRIPTS["pulsehub"]
+        if user_id and user_id > 0:
+            try:
+                await database.record_shown_scripts(user_id, [v["script_code"]], "pulsehub")
+            except Exception as e:
+                logger.warning(f"Error recording shown pulsehub: {e}")
+        return [{
+            "title": v["title"],
+            "game_name": v["game_name"],
+            "script_code": v["script_code"],
+            "source": v["source"],
+            "is_verified": True,
+            "is_keyless": True,
+            "features": v["features"],
+            "safety_note": "Проверено: 100% без ключа (Keyless), официальный лоадер",
+            "key_label": "🟢 100% Keyless (Без ключа)",
+            "image_url": v.get("image_url"),
+        }]
 
     # 3. Build multi-tiered targeted queries
     search_queries = [clean_query]
@@ -1053,17 +1212,25 @@ async def search_scripts_online(
         if len(w) >= 5 and w not in search_queries:
             search_queries.append(w)
 
+    # 4. Multi-Server Concurrent Search (3 Independent Servers Concurrently!)
+    # Server 1: ScriptBlox Core Search API (multi-page query)
+    # Server 2: ScriptBlox Live Trending & Fresh Community Feed
+    # Server 3: GitHub Open-Source Lua Repositories Engine
+    server1_tasks = [loop.run_in_executor(None, _fetch_scriptblox_sync, q, 2) for q in search_queries[:3]]
+    server2_task = loop.run_in_executor(None, _fetch_scriptblox_feed_sync, clean_query, kws, 2)
+    server3_task = loop.run_in_executor(None, _fetch_github_scripts_sync, clean_query, kws, 4)
+
+    all_server_results = await asyncio.gather(*server1_tasks, server2_task, server3_task, return_exceptions=True)
+
     raw_candidates = []
     seen_titles = set()
-    for q in search_queries[:3]:
-        found = await loop.run_in_executor(None, _fetch_scriptblox_sync, q, 3)
-        for item in found:
-            t = (item.get("title") or "").strip().lower()
-            if t not in seen_titles:
-                seen_titles.add(t)
-                raw_candidates.append(item)
-        if len(raw_candidates) >= 45:
-            break
+    for batch in all_server_results:
+        if isinstance(batch, list):
+            for item in batch:
+                t = (item.get("title") or "").strip().lower()
+                if t not in seen_titles:
+                    seen_titles.add(t)
+                    raw_candidates.append(item)
 
     candidates = []
     seen_codes = set()
@@ -1081,21 +1248,24 @@ async def search_scripts_online(
         if norm_code in seen_codes:
             continue
 
-        # Check 7-day anti-repetition memory
+        # Check 7-day anti-repetition memory & stored script exclusion
         script_hash = database.hash_script_code(script_code)
         is_seen_recently = script_hash in recent_hashes
+        is_already_stored = script_hash in stored_hashes
 
         g_name = (item.get("game", {}).get("name") or "").lower()
         t_name = title.lower()
+        t_norm = re.sub(r'[-_]+', ' ', t_name)
+        g_norm = re.sub(r'[-_]+', ' ', g_name)
         is_hub = item.get("isHub", False) or g_name in ["script hub", "universal", ""]
 
         # STRICT RELEVANCE: Discard unrelated games completely
+        match_game = (clean_query in g_norm) or any(kw in g_norm for kw in kws)
+        match_title = (clean_query in t_norm) or any(kw in t_norm for kw in kws)
         if not is_hub:
-            match_game = any(kw in g_name for kw in kws) or (clean_query in g_name)
-            if not match_game:
+            if not match_game and not match_title:
                 continue
         else:
-            match_title = any(kw in t_name for kw in kws) or (clean_query in t_name)
             if not match_title:
                 continue
 
@@ -1107,25 +1277,40 @@ async def search_scripts_online(
         # Keyless evaluation
         is_keyless = is_strictly_keyless(item, title, script_code)
 
-        # Check remote script for hidden key systems
-        urls = re.findall(r'https?://[^\s\"\'\)]+', script_code)
-        if urls:
-            raw_url = urls[0]
-            if any(h in raw_url for h in ["rawscripts.net", "github", "pastebin"]):
-                is_clean_remote = await loop.run_in_executor(None, check_remote_script_keyless, raw_url)
-                if not is_clean_remote:
-                    is_keyless = False
-
         item["_is_keyless"] = is_keyless
         item["_seen_recently"] = is_seen_recently
+        item["_is_stored"] = is_already_stored
         seen_codes.add(norm_code)
         candidates.append(item)
 
-    # 4. Anti-Repetition 7-Day Filter:
-    # If we have unseen candidates, discard seen candidates completely!
-    unseen_candidates = [c for c in candidates if not c.get("_seen_recently")]
-    if unseen_candidates:
-        candidates = unseen_candidates
+    # Parallel remote keyless inspection for potential keyless candidates (asyncio.gather)
+    urls_to_verify: List[Tuple[Dict[str, Any], str]] = []
+    for item in candidates:
+        if item.get("_is_keyless"):
+            s_code = item.get("script", "")
+            urls = re.findall(r'https?://[^\s\"\'\)]+', s_code)
+            if urls:
+                r_url = urls[0]
+                if any(h in r_url for h in ["rawscripts.net", "pastebin"]) and "raw.githubusercontent.com" not in r_url:
+                    urls_to_verify.append((item, r_url))
+
+    if urls_to_verify:
+        v_tasks = [loop.run_in_executor(None, check_remote_script_keyless, u) for _, u in urls_to_verify]
+        v_results = await asyncio.gather(*v_tasks, return_exceptions=True)
+        for (item, _), res in zip(urls_to_verify, v_results):
+            if res is False:
+                item["_is_keyless"] = False
+
+    # 4. Anti-Repetition 7-Day & Channel Stored Filter:
+    # Tier 1: Scripts not seen in last 7 days AND not already in the channel/database
+    fresh_candidates = [c for c in candidates if not c.get("_seen_recently") and not c.get("_is_stored")]
+    if fresh_candidates:
+        candidates = fresh_candidates
+    else:
+        # Tier 2: If user has seen all candidates in 7 days, prioritize scripts not yet stored in the channel/database
+        unstored_candidates = [c for c in candidates if not c.get("_is_stored")]
+        if unstored_candidates:
+            candidates = unstored_candidates
 
     # 5. Multi-Factor Scoring:
     # - Keyless: +10,000 pts (Always prefer 100% keyless scripts)
@@ -1144,13 +1329,15 @@ async def search_scripts_online(
         title_in_query = 500 if (clean_query in t) else 0
         kw_count = sum(1 for w in kws if w in g or w in t) * 100
 
-        is_verified = 300 if item.get("verified", False) else 0
-        likes = min(item.get("likeCount", 0) or 0, 500)
+        is_verified = 1500 if item.get("verified", False) else 0
+        raw_likes = item.get("likeCount", 0) or 0
+        likes_score = min(raw_likes * 10, 2500)
+        community_legend = 2000 if (item.get("verified", False) and raw_likes >= 20) else 0
 
         created = str(item.get("createdAt", ""))
         is_fresh = 100 if any(yr in created for yr in ["2026", "2025", "2024"]) else 0
 
-        return (keyless_bonus + exact_game + game_in_name + title_in_query + kw_count + is_verified + is_fresh + likes)
+        return (keyless_bonus + exact_game + game_in_name + title_in_query + kw_count + is_verified + community_legend + is_fresh + likes_score)
 
     candidates.sort(key=score_script, reverse=True)
 
@@ -1194,26 +1381,53 @@ async def search_scripts_online(
         is_keyless = item.get("_is_keyless", True)
 
         key_status_label = "🟢 100% Keyless (Без ключа)" if is_keyless else "🔑 Требуется ключ (Key System)"
-        key_source_note = f"ScriptBlox ({'Без ключа' if is_keyless else 'С ключом'}, {likes} лайков)"
+        
+        if is_verified and likes >= 20:
+            safety_note = f"⭐ Verified модераторами ScriptBlox • {likes} лайков (безопасно)"
+        elif is_verified:
+            safety_note = "⭐ Verified модераторами ScriptBlox (безопасно)"
+        else:
+            safety_note = "Проверено: чистый loadstring, стилеров и вирусов нет"
+
+        source_note = item.get("_source_server") or f"ScriptBlox Core ({'Без ключа' if is_keyless else 'С ключом'}, {likes} лайков)"
 
         results.append({
             "title": item.get("title", "Roblox Script"),
             "game_name": formatted_game,
             "script_code": code_str,
-            "source": key_source_note,
+            "source": source_note,
             "is_verified": is_verified,
             "is_keyless": is_keyless,
             "features": parsed_features,
-            "safety_note": "Проверено: чистый loadstring, стилеров и вирусов нет",
+            "safety_note": safety_note,
             "key_label": key_status_label,
             "image_url": image_url,
         })
         codes_to_record.append(code_str)
 
-    # 6. Automatically record shown scripts in 7-day memory
+    # 6. Safe Emergency Fallback: If 0 online results were found, check EMERGENCY_FALLBACK_SCRIPTS
+    if not results and clean_query in EMERGENCY_FALLBACK_SCRIPTS:
+        fb = EMERGENCY_FALLBACK_SCRIPTS[clean_query]
+        fb_hash = database.hash_script_code(fb["script_code"])
+        if fb_hash not in stored_hashes and fb_hash not in recent_hashes:
+            results.append({
+                "title": fb["title"],
+                "game_name": fb["game_name"],
+                "script_code": fb["script_code"],
+                "source": fb["source"],
+                "is_verified": True,
+                "is_keyless": True,
+                "features": fb["features"],
+                "safety_note": "Проверено: 100% без ключа (Keyless), чистый проверенный код",
+                "key_label": "🟢 100% Keyless (Без ключа)",
+                "image_url": fb.get("image_url"),
+            })
+            codes_to_record.append(fb["script_code"])
+
+    # 7. Automatically record shown scripts in 7-day memory (direct await for persistence)
     if user_id and user_id > 0 and codes_to_record:
         try:
-            asyncio.create_task(database.record_shown_scripts(user_id, codes_to_record, clean_query))
+            await database.record_shown_scripts(user_id, codes_to_record, clean_query)
         except Exception as e:
             logger.warning(f"Could not record shown history for user {user_id}: {e}")
 

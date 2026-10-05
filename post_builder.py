@@ -277,6 +277,123 @@ KNOWN_GAMES_FEATURES = {
         "• Speed & Fly (Увеличенная скорость транспорта)\n"
         "• Infinite Fuel & Nitro (Бесконечное топливо)"
     ),
+    "anime vanguards": (
+        "• Auto Place & Auto Upgrade (Авто-расстановка и прокачка юнитов)\n"
+        "• Auto Skip Waves (Мгновенный пропуск волн и спидран)\n"
+        "• Infinite Gems & Gold Macro (Авто-фарм самоцветов и золота)\n"
+        "• Auto Macro Legend Stages (Авто-прохождение стадий)\n"
+        "• Speed x3 & Anti-AFK (Ускорение игры без вылетов)"
+    ),
+    "anime defenders": (
+        "• Auto Place Best Towers (Авто-размещение лучших персонажей)\n"
+        "• Auto Upgrade & Auto Ability (Авто-прокачка и ультимейты)\n"
+        "• Infinite Trait Reroll Macro (Макрос на ролл редких трейтов)\n"
+        "• Infinite Gems & Shards Farm (Фарм гемов и осколков)\n"
+        "• Auto Replay & Speedhack (Авто-повтор миссий на скорости x3)"
+    ),
+    "toilet tower defense": (
+        "• Auto Farm Coins (Автоматический фарм монет)\n"
+        "• Auto Place Best Units (Авто-расстановка сильнейших юнитов)\n"
+        "• Auto Skip Waves & Auto Restart (Авто-пропуск волн и рестарт)\n"
+        "• Crate Sniper & Auto Open (Авто-открытие ящиков)"
+    ),
+    "tower defense simulator": (
+        "• Auto Place Towers (Авто-размещение башен по мета-координатам)\n"
+        "• Auto Upgrade Strategy (Авто-прокачка по стратегиям)\n"
+        "• Auto Skip & Wave Speedup (Пропуск волн и спидран)\n"
+        "• Infinite Triumph & Coins Farm (Фарм побед и монет)"
+    ),
+    "type soul": (
+        "• Auto Farm Mobs & Quests (Авто-фарм мобов и квестов фракций)\n"
+        "• Auto Parry & Perfect Block (100% идеальное парирование)\n"
+        "• Infinite Reiatsu & Stamina (Бесконечная рейацу и выносливость)\n"
+        "• Shikai / Bankai / Res Auto Farm (Авто-прокачка способностей)\n"
+        "• Player & Hollow ESP (Подсветка игроков и пустых)"
+    ),
+    "deepwoken": (
+        "• Auto Parry 100% (Идеальное парирование всех атак)\n"
+        "• Mob Magnet & Kill Aura (Стягивание монстров и авто-удары)\n"
+        "• ESP Monsters & Players (ВХ на монстров, сундуки и игроков)\n"
+        "• Infinite Stamina & Speed (Бесконечная выносливость и бег)\n"
+        "• Safe Log / Anti-Death (Авто-выход при критическом HP)"
+    ),
+    "king legacy": (
+        "• Auto Farm Level & Sea (Авто-фарм уровня и всех морей)\n"
+        "• Fruit Sniper & Auto Store (Авто-сбор и складирование фруктов)\n"
+        "• Fast Attack & Bring Mobs (Быстрая атака и стягивание врагов)\n"
+        "• Auto Dungeon & Raid Boss (Авто-рейды и фарм боссов)\n"
+        "• Teleport Islands & Quests (Мгновенный телепорт к квестам)"
+    ),
+    "plants vs brainrots": (
+        "• Instant Auto Steal (Мгновенная кража всех редких растений и брейнротов)\n"
+        "• Infinite Sun / Money Farm (Бесконечное солнце и авто-покупка)\n"
+        "• Godmode & Super Speed (Бессмертие от зомби и супер-скорость)\n"
+        "• Base Teleport & ESP (Подсветка редких предметов и возврат на базу)\n"
+        "• Auto Kill All Brainrots (Мгновенная зачистка волн)"
+    ),
+    "brainrot rng": (
+        "• Auto Roll & Fast Roll (Автоматическая моментальная прокрутка)\n"
+        "• Mythic & Secret Aura Sniper (Авто-сохранение редчайших секреток)\n"
+        "• Infinite Luck Glitch (Максимальный буст удачи на редкие мемы)\n"
+        "• Auto Craft & Auto Sell (Авто-крафт предметов и продажа хлама)\n"
+        "• Speed Boost & Teleport (Быстрое перемещение по карте)"
+    ),
+    "dead rails": (
+        "• Auto Repair Train (Автоматический ремонт поезда на ходу)\n"
+        "• Auto Collect Fuel & Wood (Авто-сбор угля, дерева и ресурсов)\n"
+        "• Monster & Bandit ESP (Подсветка бандитов, зомби и лута)\n"
+        "• Silent Aim & Infinite Ammo (Скрытый аимбот и бесконечные патроны)\n"
+        "• Speed & Godmode (Бессмертие и увеличенная скорость)"
+    ),
+    "blue lock rivals": (
+        "• Auto Goal & Curved Shot (Авто-гол с любой точки поля крученым ударом)\n"
+        "• Infinite Stamina & Flow (Бесконечная выносливость и режим Flow)\n"
+        "• Perfect Tackle & Auto Steal (100% отбор мяча у противника)\n"
+        "• Speed Boost & Fast Sprint (Супер-скорость рывка)\n"
+        "• Ball Predictor ESP (Траектория полета мяча)"
+    ),
+    "basketball legends": (
+        "• 100% Green Release / Auto Shoot (Идеальные трехочковые броски в кольцо)\n"
+        "• Auto Steal & Auto Block (Автоматический отбор и блок мяча)\n"
+        "• Infinite Stamina & Speed (Бесконечная энергия и ускорение)\n"
+        "• Ankle Breaker Dribble (Авто-дриблинг с падением защитников)\n"
+        "• Magnet Rebound (Авто-подбор всех отскоков)"
+    ),
+    "combat warriors": (
+        "• Silent Aim & Bow Aimbot (Точнейший аимбот из лука и арбалета)\n"
+        "• Auto Parry 100% (Идеальное парирование ударов холодного оружия)\n"
+        "• Infinite Stamina & Fast Roll (Бесконечные перекаты и выносливость)\n"
+        "• Kill Aura & Instant Heavy (Быстрые тяжелые удары без задержки)\n"
+        "• Player ESP & Distance (Подсветка игроков, брони и HP)"
+    ),
+    "dress to impress": (
+        "• Unlock All VIP & Custom Clothes (Доступ ко всем VIP вещам и аксессуарам)\n"
+        "• Auto Vote 5 Stars (Автоматические максимальные оценки)\n"
+        "• Speed Boost & Fly (Быстрое перемещение по примерочным)\n"
+        "• Teleport to Outfits (Мгновенный телепорт к нужной одежде)\n"
+        "• Cash / Stars Auto Farm (Авто-фарм валюты стиля)"
+    ),
+    "driving empire": (
+        "• Infinite Cash Auto Farm (Автоматический фарм миллионов за гонки)\n"
+        "• Max Speed & Nitro Hack (Колоссальное ускорение любого авто)\n"
+        "• Auto Race / Win All (Автоматическая победа во всех заездах)\n"
+        "• Infinite Fuel & No Crash (Бесконечный бензин без повреждений)\n"
+        "• Teleport Dealership (Мгновенный телепорт по автосалонам)"
+    ),
+    "car driving indonesia": (
+        "• Auto Drive & Cash Farm (Автоматическая езда и заработок денег)\n"
+        "• Speed Boost & Super Nitro (Увеличенная скорость любого транспорта)\n"
+        "• Infinite Fuel (Бесконечное топливо)\n"
+        "• Teleport to Cities (Быстрый телепорт по городам и гаражам)\n"
+        "• Vehicle Fly Mode (Режим полёта на автомобиле)"
+    ),
+    "jailbreak": (
+        "• Auto Rob All (Авто-ограбление всех банков, ювелирок и казино)\n"
+        "• Police & Criminal ESP (ВХ на полицию, преступников и вертолеты)\n"
+        "• Infinite Nitro & Car Fly (Бесконечное нитро и летающие машины)\n"
+        "• Silent Aim & Wallbang (Скрытый аимбот и прострел стен)\n"
+        "• Auto Escape & Safe TP (Мгновенный побег из тюрьмы)"
+    ),
 }
 
 def generate_ai_features(game_name: str) -> str:
@@ -289,7 +406,39 @@ def generate_ai_features(game_name: str) -> str:
             return v
 
     # Keyword based heuristic generator
-    if any(w in clean for w in ["tycoon", "тайкун"]):
+    if any(w in clean for w in ["steal", "egg", "brainrot", "plant", "краж", "яйц", "мем"]):
+        return (
+            "• Instant Auto Steal (Мгновенная кража у всех игроков)\n"
+            "• Base Teleport (Мгновенный возврат на базу с добычей)\n"
+            "• Godmode & Anti-Ragdoll (Полное бессмертие и защита от падений)\n"
+            "• Fly Hack & Super Speed (Свободный полет и гипер-скорость)\n"
+            "• Box ESP & Item Radar (Подсветка ценностей сквозь стены)"
+        )
+    elif any(w in clean for w in ["tower defense", "tower", "td", "defense", "защита башен"]):
+        return (
+            "• Auto Place Best Towers (Авто-размещение сильнейших юнитов)\n"
+            "• Auto Upgrade Strategy (Авто-прокачка по оптимальным волнам)\n"
+            "• Auto Skip Waves (Мгновенный пропуск волн и спидран)\n"
+            "• Infinite Gems & Coins Farm (Авто-фарм ресурсов и самоцветов)\n"
+            "• Speedhack x3 (Ускорение матча без рассинхрона)"
+        )
+    elif any(w in clean for w in ["football", "soccer", "basketball", "goal", "sport", "футбол", "баскетбол"]):
+        return (
+            "• Auto Goal & Curved Shot (Авто-гол с любой точки поля)\n"
+            "• 100% Perfect Tackle (Идеальный отбор мяча у противника)\n"
+            "• Infinite Stamina (Бесконечная выносливость и спринт)\n"
+            "• Speed Boost (Увеличенная скорость рывка)\n"
+            "• Ball ESP & Trajectory (Траектория полета мяча)"
+        )
+    elif any(w in clean for w in ["car", "drive", "driving", "racing", "drift", "гонк", "машин", "дрифт"]):
+        return (
+            "• Infinite Cash Auto Farm (Автоматический фарм валюты за километраж)\n"
+            "• Super Speed & Nitro (Колоссальное ускорение любого авто)\n"
+            "• No Crash & Infinite Fuel (Бесконечное топливо без поломок)\n"
+            "• Vehicle Fly Mode (Режим свободного полёта на машине)\n"
+            "• Teleport Dealership & Garages (Быстрый ТП по городам и гаражам)"
+        )
+    elif any(w in clean for w in ["tycoon", "тайкун"]):
         return (
             "• Auto Collect Cash (Автоматический сбор денег с дропперов)\n"
             "• Auto Buy / Instant Build (Авто-покупка всех улучшений)\n"
@@ -321,7 +470,7 @@ def generate_ai_features(game_name: str) -> str:
             "• Speed Boost & No Clip (Прохождение сквозь препятствия)\n"
             "• Godmode (Полная неуязвимость к атакам)"
         )
-    elif any(w in clean for w in ["battle", "fight", "punch", "бой", "битва"]):
+    elif any(w in clean for w in ["battle", "fight", "punch", "anime", "аниме", "бой", "битва"]):
         return (
             "• Auto Attack & Combo (Мгновенные серии ударов по противникам)\n"
             "• Auto Parry / Auto Dodge (Автоматическое уклонение и блок)\n"

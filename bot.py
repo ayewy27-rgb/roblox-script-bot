@@ -1017,8 +1017,9 @@ async def send_search_results_page(target, user_id: int, page: int = 0):
 
     # Header for the current page
     header_text = (
-        f"⚡ <b>НАЙДЕНО СКРИПТОВ БЕЗ КЛЮЧЕЙ: {total_results}</b> ⚡\n"
+        f"⚡ <b>НАЙДЕНО СКРИПТОВ БЕЗ КЛЮЧЕЙ (3 СЕРВЕРА): {total_results}</b> ⚡\n"
         f"━━━━━━━━━━━━━━━━━━━━━\n"
+        f"📡 <i>Источники: ScriptBlox Core, ScriptBlox Feed, GitHub Lua Engine</i>\n\n"
         f"📖 Показаны скрипты <b>#{start_idx + 1}–#{end_idx}</b> из <b>{total_results}</b> (Страница {page + 1}/{total_pages})\n"
         f"Выберите действие под нужным читом или перелистните дальше:"
     )
@@ -1118,7 +1119,7 @@ async def perform_search_and_display(chat_id: int, user_id: int, query: str, sen
     # Clean previous search cards to keep chat clean
     await cleanup_user_search_messages(chat_id, user_id)
 
-    status_msg = await send_target.answer(f"⏳ <b>Ищу проверенные скрипты для «{html.escape(query)}» (строго БЕЗ КЛЮЧЕЙ)...</b>")
+    status_msg = await send_target.answer(f"⏳ <b>Ищу по 3 серверам скриптов (ScriptBlox Core, Feed, GitHub) для «{html.escape(query)}»...</b>")
     results = await script_finder.search_scripts_online(query, user_id=user_id)
     try:
         await status_msg.delete()
@@ -1242,6 +1243,10 @@ async def callback_publish_found(call: CallbackQuery):
             return
 
         await database.update_script_channel_post(script_key, sent.message_id)
+        try:
+            await database.record_shown_scripts(user_id, [item["script_code"]], item["game_name"])
+        except Exception:
+            pass
 
         # Update linked user request if search originated from suggestion
         req_id = _SEARCH_REQ_MAP.pop(user_id, None)
@@ -1297,6 +1302,10 @@ async def callback_save_found(call: CallbackQuery):
         executors=post_builder.DEFAULT_EXECUTORS,
         image_url=item.get("image_url"),
     )
+    try:
+        await database.record_shown_scripts(user_id, [item["script_code"]], item["game_name"])
+    except Exception:
+        pass
 
     req_id = _SEARCH_REQ_MAP.pop(user_id, None)
     if req_id:
