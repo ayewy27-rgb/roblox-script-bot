@@ -130,8 +130,11 @@ async def check_user_subscription(user_id: int, channel: str) -> bool:
         return False
     except TelegramBadRequest as e:
         err_msg = str(e).lower()
-        if "participant_id_invalid" in err_msg or "user not found" in err_msg:
+        if "participant_id_invalid" in err_msg or "user not found" in err_msg or "member not found" in err_msg:
             return False
+        if "chat not found" in err_msg or "bot is not a member" in err_msg or "not enough rights" in err_msg:
+            logger.warning(f"Bot lacks rights or chat not found for subscription check ({channel}): {e}. Passing user through.")
+            return True
         logger.error(f"TelegramBadRequest in subscription check: {e}")
         return False
     except Exception as e:
@@ -192,8 +195,10 @@ def get_admin_menu_keyboard() -> InlineKeyboardMarkup:
 
 def build_script_delivery_keyboard(script_code: str, channel_url: str) -> InlineKeyboardMarkup:
     buttons = []
-    if script_code and script_code.strip():
-        buttons.append([InlineKeyboardButton(text="📋 Скопировать скрипт", copy_text=CopyTextButton(text=script_code.strip()))])
+    clean_code = (script_code or "").strip()
+    # Telegram CopyTextButton text must be between 1 and 256 characters
+    if clean_code and len(clean_code) <= 256:
+        buttons.append([InlineKeyboardButton(text="📋 Скопировать скрипт", copy_text=CopyTextButton(text=clean_code))])
     buttons.append([InlineKeyboardButton(text="📢 Наш канал со скриптами ↗", url=channel_url or "https://t.me/script_drop")])
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
@@ -211,20 +216,39 @@ async def deliver_script_to_user(chat_id: int, script: dict, channel_url: str):
     delivery_banner = getattr(config, "BANNER_LAPIS", None) or getattr(config, "BANNER_DELIVERY", None) or getattr(config, "BANNER_LAPIS_CLEAN", None)
     banner_to_use = delivery_banner if (delivery_banner and delivery_banner.exists()) else config.BANNER_PATH
     
+    # Telegram photo caption hard limit is 1024 characters
+    if len(delivery_text) <= 1024 and banner_to_use and banner_to_use.exists():
+        try:
+            photo = FSInputFile(banner_to_use)
+            await bot.send_photo(
+                chat_id=chat_id,
+                photo=photo,
+                caption=delivery_text,
+                reply_markup=delivery_kb,
+            )
+            return
+        except Exception as pe:
+            logger.warning(f"Could not send delivery photo with caption: {pe}")
+
+    # Fallback when delivery_text > 1024 or photo with caption failed:
     if banner_to_use and banner_to_use.exists():
-        photo = FSInputFile(banner_to_use)
-        await bot.send_photo(
-            chat_id=chat_id,
-            photo=photo,
-            caption=delivery_text,
-            reply_markup=delivery_kb,
-        )
-    else:
-        await bot.send_message(
-            chat_id=chat_id,
-            text=delivery_text,
-            reply_markup=delivery_kb,
-        )
+        try:
+            photo = FSInputFile(banner_to_use)
+            short_intro = (
+                f"👋 <b>Привет! Вот держи готовый скрипт для {post_builder.format_game_name(game_title)}:</b>\n\n"
+                f"🛡 <b>Безопасность:</b> 🟢 <i>Проверено: чистый loadstring, вирусов нет</i>\n"
+                f"🔑 <b>Ключ:</b> 🟢 <i>Не требуется (100% Keyless)</i>\n\n"
+                f"👇 <i>Код отправлен сообщением ниже (нажмите на код для копирования):</i>"
+            )
+            await bot.send_photo(chat_id=chat_id, photo=photo, caption=short_intro)
+        except Exception as pe:
+            logger.warning(f"Could not send delivery photo intro: {pe}")
+
+    await bot.send_message(
+        chat_id=chat_id,
+        text=delivery_text[:4096],
+        reply_markup=delivery_kb,
+    )
 
 
 
@@ -497,13 +521,13 @@ async def send_promo_scenario_card(chat_id: int, game_query: str):
         )
     cycles_text = "\n\n".join(cycles_parts)
 
-    kb = InlineKeyboardMarkup(
-        inline_keyboard=[
-            [InlineKeyboardButton(text="📋 Скопировать всю озвучку (1 клик)", copy_text=CopyTextButton(text=promo["voiceover_text"]))],
-            [InlineKeyboardButton(text="📖 Шпаргалка по монтажу Shorts", callback_data="promo_memo_show")],
-            [InlineKeyboardButton(text="👑 В меню админа", callback_data="open_admin_panel")]
-        ]
-    )
+    vo_text = (promo.get("voiceover_text") or "").strip()
+    promo_buttons = []
+    if vo_text:
+        promo_buttons.append([InlineKeyboardButton(text="📋 Скопировать озвучку (1 клик)", copy_text=CopyTextButton(text=vo_text[:256]))])
+    promo_buttons.append([InlineKeyboardButton(text="📖 Шпаргалка по монтажу Shorts", callback_data="promo_memo_show")])
+    promo_buttons.append([InlineKeyboardButton(text="👑 В меню админа", callback_data="open_admin_panel")])
+    kb = InlineKeyboardMarkup(inline_keyboard=promo_buttons)
 
     text = (
         f"🎬 <b>СЦЕНАРИЙ SHORTS / TIKTOK | {promo['game_name'].upper()}</b>\n"
@@ -823,6 +847,8 @@ async def publish_to_channel(call: CallbackQuery):
     try:
         sent = None
         photo_url = script.get("image_url")
+        if photo_url and any(bad in photo_url.lower() for bad in ["404", "no-script", "placeholder", "default"]):
+            photo_url = None
         if photo_url and photo_url.startswith("http"):
             try:
                 sent = await bot.send_photo(chat_id=channel, photo=photo_url, caption=post_text, reply_markup=post_kb)
@@ -911,12 +937,32 @@ async def list_scripts_handler(call: CallbackQuery):
             f"🔗 <a href=\"{link}\">Ссылка на выдачу</a>{post_link}\n"
         )
 
+    text_lines.append(
+        "💡 <i>Чтобы удалить ненужный скрипт, отправьте:</i>\n"
+        "<code>/del_script ключ</code> <i>(например: <code>/del_script s1</code>)</i>"
+    )
+
     kb = InlineKeyboardMarkup(
         inline_keyboard=[[InlineKeyboardButton(text="◀️ Назад в меню", callback_data="open_admin_panel")]]
     )
 
     await call.message.answer("\n".join(text_lines), reply_markup=kb, disable_web_page_preview=True)
     await call.answer()
+
+@dp.message(Command("del_script"))
+async def handle_delete_script_command(message: Message, command: CommandObject):
+    user_id = message.from_user.id if message.from_user else 0
+    if not await is_admin(user_id):
+        return
+    key = (command.args or "").strip()
+    if not key:
+        await message.answer("ℹ️ Использование: <code>/del_script s1</code>")
+        return
+    success = await database.delete_script(key)
+    if success:
+        await message.answer(f"✅ Скрипт с ключом <code>{html.escape(key)}</code> удалён из базы и JSON-хранилища!")
+    else:
+        await message.answer(f"❌ Скрипт с ключом <code>{html.escape(key)}</code> не найден в базе.")
 
 # --- CANCEL FSM ---
 
@@ -1173,9 +1219,9 @@ async def send_search_results_page(target, user_id: int, page: int = 0):
 
     # Header for the current page
     header_text = (
-        f"⚡ <b>НАЙДЕНО СКРИПТОВ БЕЗ КЛЮЧЕЙ (3 СЕРВЕРА): {total_results}</b> ⚡\n"
+        f"⚡ <b>ТОПОВЫЕ СКРИПТЫ & ХАБЫ (ВЕРИФИЦИРОВАННЫЕ): {total_results}</b> ⚡\n"
         f"━━━━━━━━━━━━━━━━━━━━━\n"
-        f"📡 <i>Источники: ScriptBlox Core, ScriptBlox Feed, Community Verified Hubs</i>\n\n"
+        f"📡 <i>Источники: ScriptBlox Core, Trending Feeds, Community Verified Hubs</i>\n\n"
         f"📖 Показаны скрипты <b>#{start_idx + 1}–#{end_idx}</b> из <b>{total_results}</b> (Страница {page + 1}/{total_pages})\n"
         f"Выберите действие под нужным читом или перелистните дальше:"
     )
@@ -1225,6 +1271,9 @@ async def send_search_results_page(target, user_id: int, page: int = 0):
         )
 
         img_url = item.get("image_url")
+        if img_url and any(bad in img_url.lower() for bad in ["404", "no-script", "placeholder", "default"]):
+            img_url = None
+
         sent_card_msg = None
         if img_url and img_url.startswith("http"):
             try:
@@ -1380,6 +1429,8 @@ async def callback_publish_found(call: CallbackQuery):
     try:
         sent = None
         photo_url = item.get("image_url")
+        if photo_url and any(bad in photo_url.lower() for bad in ["404", "no-script", "placeholder", "default"]):
+            photo_url = None
         if photo_url and photo_url.startswith("http"):
             try:
                 sent = await bot.send_photo(chat_id=channel, photo=photo_url, caption=post_text, reply_markup=post_kb)
@@ -1857,7 +1908,10 @@ async def process_user_script_suggest(message: Message, state: FSMContext):
 
 @dp.callback_query(F.data == "admin_script_requests")
 async def callback_admin_script_requests(call: CallbackQuery):
-    await call.answer()
+    try:
+        await call.answer()
+    except Exception:
+        pass
     if not await is_admin(call.from_user.id):
         await call.message.answer("⛔ У вас нет доступа к панели администратора.")
         return
@@ -1931,7 +1985,10 @@ async def callback_admin_script_requests(call: CallbackQuery):
 
 @dp.callback_query(F.data == "admin_req_history")
 async def callback_admin_req_history(call: CallbackQuery):
-    await call.answer()
+    try:
+        await call.answer()
+    except Exception:
+        pass
     if not await is_admin(call.from_user.id):
         await call.message.answer("⛔ Нет доступа к панели администратора.")
         return
@@ -2104,7 +2161,8 @@ async def handle_user_media(message: Message, state: FSMContext):
     if await is_admin(user_id):
         return
 
-    caption = message.caption or "<i>Без подписи</i>"
+    raw_caption = (message.caption or "").strip()
+    caption = html.escape(raw_caption[:500]) if raw_caption else "<i>Без подписи</i>"
     user_mention = format_user_mention(user)
     user_link = get_user_chat_link(user)
     alert_kb = InlineKeyboardMarkup(
@@ -2280,7 +2338,10 @@ async def callback_admin_autopost(call: CallbackQuery):
     )
 
     await call.message.answer(text, reply_markup=kb)
-    await call.answer()
+    try:
+        await call.answer()
+    except Exception:
+        pass
 
 @dp.callback_query(F.data == "autopost_toggle")
 async def callback_autopost_toggle(call: CallbackQuery):

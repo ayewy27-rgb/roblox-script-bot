@@ -148,12 +148,9 @@ async def init_db():
             if "image_url" not in columns:
                 await db.execute("ALTER TABLE scripts ADD COLUMN image_url TEXT DEFAULT NULL")
                 
-        # Synchronize from persistent JSON store into SQLite
+        # Safe Two-Way Synchronize between persistent JSON store and SQLite
         store = _read_scripts_store()
         if store:
-            valid_keys = tuple(store.keys())
-            placeholders = ",".join("?" for _ in valid_keys)
-            await db.execute(f"DELETE FROM scripts WHERE script_key NOT IN ({placeholders})", valid_keys)
             for key, item in store.items():
                 s_id = item.get("id")
                 s_key = item.get("script_key", key)
@@ -171,6 +168,30 @@ async def init_db():
                     item.get("channel_message_id"),
                     item.get("created_at")
                 ))
+
+        # Resurrect any scripts present in SQLite but missing from JSON store
+        db.row_factory = aiosqlite.Row
+        async with db.execute("SELECT * FROM scripts") as s_cur:
+            db_scripts = await s_cur.fetchall()
+            updated_store = dict(store)
+            for r in db_scripts:
+                k = r["script_key"]
+                if k not in updated_store:
+                    slug = re.sub(r'[^a-z0-9]', '', (r["game_name"] or "").lower())
+                    updated_store[k] = {
+                        "id": r["id"],
+                        "script_key": k,
+                        "slug": slug,
+                        "game_name": r["game_name"],
+                        "features": r["features"],
+                        "script_code": r["script_code"],
+                        "executors": r["executors"],
+                        "image_url": r["image_url"],
+                        "channel_message_id": r["channel_message_id"],
+                        "created_at": str(r["created_at"]) if r["created_at"] else None,
+                    }
+            if len(updated_store) != len(store):
+                _write_scripts_store(updated_store)
 
         # Synchronize from persistent shown_history.json into SQLite
         history_data = _read_shown_history()
@@ -676,5 +697,29 @@ async def clear_shown_history(user_id: int, game_name: Optional[str] = None):
             _write_shown_history(history_data)
     except Exception as e:
         logger.warning(f"Error clearing shown history in JSON for {user_id}: {e}")
+
+async def delete_script(script_key: str) -> bool:
+    """Deletes a script from both SQLite and persistent JSON store."""
+    script_key = str(script_key).strip()
+    deleted = False
+    try:
+        async with aiosqlite.connect(DB_PATH) as db:
+            cur = await db.execute("DELETE FROM scripts WHERE script_key = ?", (script_key,))
+            await db.commit()
+            if cur.rowcount > 0:
+                deleted = True
+    except Exception as e:
+        logger.error(f"Error deleting script '{script_key}' from SQLite: {e}")
+
+    try:
+        store = _read_scripts_store()
+        if script_key in store:
+            del store[script_key]
+            _write_scripts_store(store)
+            deleted = True
+    except Exception as e:
+        logger.error(f"Error deleting script '{script_key}' from JSON store: {e}")
+
+    return deleted
 
 
