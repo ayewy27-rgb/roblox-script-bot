@@ -147,6 +147,8 @@ async def init_db():
                 await db.execute("ALTER TABLE scripts ADD COLUMN channel_message_id INTEGER DEFAULT NULL")
             if "image_url" not in columns:
                 await db.execute("ALTER TABLE scripts ADD COLUMN image_url TEXT DEFAULT NULL")
+            if "slug" not in columns:
+                await db.execute("ALTER TABLE scripts ADD COLUMN slug TEXT DEFAULT NULL")
                 
         # Safe Two-Way Synchronize between persistent JSON store and SQLite
         store = _read_scripts_store()
@@ -155,11 +157,12 @@ async def init_db():
                 s_id = item.get("id")
                 s_key = item.get("script_key", key)
                 await db.execute("""
-                    INSERT OR REPLACE INTO scripts (id, script_key, game_name, features, script_code, executors, image_url, channel_message_id, created_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, CURRENT_TIMESTAMP))
+                    INSERT OR REPLACE INTO scripts (id, script_key, slug, game_name, features, script_code, executors, image_url, channel_message_id, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, CURRENT_TIMESTAMP))
                 """, (
                     s_id,
                     s_key,
+                    item.get("slug", ""),
                     item.get("game_name", "Roblox"),
                     item.get("features", ""),
                     item.get("script_code", ""),
@@ -168,6 +171,7 @@ async def init_db():
                     item.get("channel_message_id"),
                     item.get("created_at")
                 ))
+            await db.commit()
 
         # Resurrect any scripts present in SQLite but missing from JSON store
         db.row_factory = aiosqlite.Row
@@ -242,9 +246,16 @@ async def update_script_channel_post(script_key: str, message_id: int):
         _write_scripts_store(store)
 
 async def search_scripts(query: str, limit: int = 5) -> List[Dict[str, Any]]:
-    """Searches scripts by game name or features, handling Russian aliases."""
+    """Searches scripts by game name, slug, key, or features, handling Russian aliases."""
     raw = query.strip().lower()
-    
+    if not raw:
+        return []
+
+    # Priority 0: Direct numeric or key lookup
+    direct = await get_script(raw)
+    if direct:
+        return [direct]
+
     synonyms = {
         "блокс": "blox",
         "фрут": "fruit",
@@ -273,6 +284,13 @@ async def search_scripts(query: str, limit: int = 5) -> List[Dict[str, Any]]:
         "ночи": "nights",
         "лес": "forest",
         "99": "99",
+        "пет": "pet",
+        "сим": "simulator",
+        "симулятор": "simulator",
+        "ps99": "pet simulator",
+        "инфинити": "infinite",
+        "админк": "admin",
+        "канхаб": "canhub",
     }
     
     normalized = raw
@@ -282,19 +300,36 @@ async def search_scripts(query: str, limit: int = 5) -> List[Dict[str, Any]]:
             
     pattern1 = f"%{raw}%"
     pattern2 = f"%{normalized}%"
+    clean_q = re.sub(r'[^a-z0-9]', '', normalized)
+    pattern3 = f"%{clean_q}%" if clean_q else pattern2
     
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory = aiosqlite.Row
         sql = """
             SELECT * FROM scripts
-            WHERE LOWER(game_name) LIKE ? OR LOWER(game_name) LIKE ?
+            WHERE LOWER(game_name) LIKE ? OR LOWER(game_name) LIKE ? OR LOWER(game_name) LIKE ?
                OR LOWER(features) LIKE ? OR LOWER(features) LIKE ?
-            ORDER BY id DESC
+               OR LOWER(script_key) LIKE ? OR LOWER(COALESCE(slug, '')) LIKE ?
+            ORDER BY id ASC
             LIMIT ?
         """
-        async with db.execute(sql, (pattern1, pattern2, pattern1, pattern2, limit)) as cursor:
+        async with db.execute(sql, (pattern1, pattern2, pattern3, pattern1, pattern2, pattern1, pattern3, limit)) as cursor:
             rows = await cursor.fetchall()
-            return [dict(r) for r in rows]
+            if rows:
+                return [dict(r) for r in rows]
+
+    # Fallback to store
+    store = _read_scripts_store()
+    results = []
+    for k, v in store.items():
+        g_name = v.get("game_name", "").lower()
+        slug = v.get("slug", "").lower()
+        feat = v.get("features", "").lower()
+        if raw in g_name or normalized in g_name or (clean_q and clean_q in slug) or raw in feat or raw == k.lower():
+            results.append(v)
+            if len(results) >= limit:
+                break
+    return results
 
 async def record_user_received(user_id: int, script_key: str):
     """Records that this specific user opened/received this script."""
@@ -356,13 +391,13 @@ async def add_script(
             if row:
                 script_id = row[0]
                 await db.execute(
-                    "UPDATE scripts SET game_name = ?, features = ?, script_code = ?, executors = ?, image_url = ? WHERE id = ?",
-                    (game_name, features, script_code, executors, image_url, script_id)
+                    "UPDATE scripts SET game_name = ?, slug = ?, features = ?, script_code = ?, executors = ?, image_url = ? WHERE id = ?",
+                    (game_name, slug, features, script_code, executors, image_url, script_id)
                 )
             else:
                 cursor = await db.execute(
-                    "INSERT INTO scripts (script_key, game_name, features, script_code, executors, image_url) VALUES (?, ?, ?, ?, ?, ?)",
-                    (script_key, game_name, features, script_code, executors, image_url)
+                    "INSERT INTO scripts (script_key, slug, game_name, features, script_code, executors, image_url) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    (script_key, slug, game_name, features, script_code, executors, image_url)
                 )
                 script_id = cursor.lastrowid
         await db.commit()
@@ -386,68 +421,154 @@ async def add_script(
 async def get_script(script_key: str) -> Optional[Dict[str, Any]]:
     """
     Multi-tier resilient lookup:
-    1. Query SQLite by key or ID
-    2. Fallback to scripts_store.json by key, ID, or slug
+    1. Query SQLite by key, candidate key, ID, channel_message_id, or slug
+    2. Fallback to scripts_store.json by key, candidate key, ID, channel_message_id, or slug
     3. Auto-sync recovered entry into SQLite
     """
-    script_key = str(script_key).strip()
-    num_id = int(script_key.replace("s", "")) if (script_key.startswith("s") and script_key[1:].isdigit()) else -1
-    
+    if not script_key:
+        return None
+    raw_key = str(script_key).strip()
+    clean_k = raw_key.lower()
+
+    # Extract numeric ID if present
+    num_id = -1
+    if clean_k.isdigit():
+        num_id = int(clean_k)
+    elif clean_k.startswith("s") and clean_k[1:].isdigit():
+        num_id = int(clean_k[1:])
+    elif clean_k.startswith("post_") and clean_k[5:].isdigit():
+        num_id = int(clean_k[5:])
+    elif clean_k.startswith("post") and clean_k[4:].isdigit():
+        num_id = int(clean_k[4:])
+    elif clean_k.startswith("p") and clean_k[1:].isdigit():
+        num_id = int(clean_k[1:])
+    elif clean_k.startswith("msg_") and clean_k[4:].isdigit():
+        num_id = int(clean_k[4:])
+    elif clean_k.startswith("m") and clean_k[1:].isdigit():
+        num_id = int(clean_k[1:])
+
+    candidate_keys = [raw_key, clean_k]
+    if num_id >= 0:
+        candidate_keys.extend([f"s{num_id}", str(num_id), f"post_{num_id}", f"post{num_id}"])
+    candidate_keys = list(dict.fromkeys(candidate_keys))
+
     # Tier 1: Check SQLite
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory = aiosqlite.Row
-        async with db.execute(
-            "SELECT * FROM scripts WHERE script_key = ? OR id = ?",
-            (script_key, num_id)
-        ) as cursor:
+        
+        # 1a: By candidate keys, id, or channel_message_id
+        placeholders = ",".join("?" for _ in candidate_keys)
+        query = f"""
+            SELECT * FROM scripts 
+            WHERE script_key IN ({placeholders}) 
+               OR (id = ? AND id >= 0) 
+               OR (channel_message_id = ? AND channel_message_id > 0)
+            ORDER BY id ASC LIMIT 1
+        """
+        params = list(candidate_keys) + [num_id, num_id]
+        async with db.execute(query, params) as cursor:
             row = await cursor.fetchone()
             if row:
                 return dict(row)
 
-    # Tier 2: Check JSON store
-    store = _read_scripts_store()
-    match = store.get(script_key)
-    
-    if not match and num_id > 0:
-        for k, v in store.items():
-            if v.get("id") == num_id or k == f"s{num_id}":
-                match = v
-                break
-                
-    if not match:
-        clean_key = re.sub(r'[^a-z0-9]', '', script_key.lower())
+        # 1b: By slug or clean game name match with alias resolution
+        clean_key = re.sub(r'[^a-z0-9]', '', clean_k)
         alias_map = {
+            "mm2": "murdermystery2",
+            "мм2": "murdermystery2",
+            "мардер": "murdermystery2",
+            "murdermystery": "murdermystery2",
+            "bf": "bloxfruits",
+            "bloxfruit": "bloxfruits",
+            "bb": "bladeball",
+            "ps99": "petsimulator99",
+            "dh": "dahood",
+            "iy": "infiniteyield",
             "99ночей": "99nightsintheforest",
             "99ночейвлесу": "99nightsintheforest",
             "99ночи": "99nightsintheforest",
             "99nights": "99nightsintheforest",
             "ночей": "99nightsintheforest",
-            "мм2": "murdermystery2",
-            "мардер": "murdermystery2",
             "блоксфрутс": "bloxfruits",
+            "блокс": "bloxfruits",
             "блейдбол": "bladeball",
+            "блейд": "bladeball",
             "стилэгг": "stealanegg",
+            "стил": "stealanegg",
             "яйца": "stealanegg",
             "ривалс": "rivals",
             "райвалс": "rivals",
+            "фиш": "fisch",
+            "рыбалка": "fisch",
+            "рыба": "fisch",
+            "дахуд": "dahood",
+            "худ": "dahood",
+            "бедварс": "bedwars",
+            "дорс": "doors",
+            "петсим": "petsimulator99",
+            "петсим99": "petsimulator99",
+            "петсимулятор": "petsimulator99",
+            "пульс": "pulsehub",
+            "инфинити": "infiniteyield",
+            "админка": "infiniteyield",
+            "канхаб": "canhub",
         }
-        normalized_target = alias_map.get(script_key.lower().replace(" ", "").replace("_", ""), clean_key)
+        normalized_target = alias_map.get(clean_k.replace(" ", "").replace("_", ""), clean_key)
+        target_search = normalized_target or clean_key
+
+        if target_search and len(target_search) >= 2:
+            async with db.execute("""
+                SELECT * FROM scripts 
+                WHERE LOWER(REPLACE(REPLACE(REPLACE(game_name, ' ', ''), '-', ''), '_', '')) LIKE ?
+                   OR LOWER(REPLACE(REPLACE(REPLACE(script_key, ' ', ''), '-', ''), '_', '')) LIKE ?
+                   OR LOWER(COALESCE(slug, '')) LIKE ?
+                   OR LOWER(COALESCE(slug, '')) = ?
+                ORDER BY id ASC LIMIT 1
+            """, (f"%{target_search}%", f"%{target_search}%", f"%{target_search}%", target_search)) as cursor:
+                row = await cursor.fetchone()
+                if row:
+                    return dict(row)
+
+    # Tier 2: Check JSON store
+    store = _read_scripts_store()
+    match = None
+    
+    # 2a: Direct candidate key lookup
+    for ck in candidate_keys:
+        if ck in store:
+            match = store[ck]
+            break
+
+    # 2b: Numeric ID or channel_message_id lookup
+    if not match and num_id >= 0:
+        for k, v in store.items():
+            if v.get("id") == num_id or v.get("channel_message_id") == num_id or k == f"s{num_id}":
+                match = v
+                break
+
+    # 2c: Slug or game alias lookup
+    if not match:
         for k, v in store.items():
             slug = v.get("slug", "")
-            if slug and normalized_target:
-                if slug == normalized_target or (len(normalized_target) >= 4 and normalized_target in slug) or (len(slug) >= 4 and slug in normalized_target):
+            g_name = re.sub(r'[^a-z0-9]', '', v.get("game_name", "").lower())
+            if slug and target_search:
+                if slug == target_search or (len(target_search) >= 3 and (target_search in slug or slug in target_search)):
                     match = v
                     break
+            if g_name and target_search and (len(target_search) >= 3 and (target_search in g_name or g_name in target_search)):
+                match = v
+                break
 
     # If found in JSON, resurrect into SQLite
     if match:
         async with aiosqlite.connect(DB_PATH) as db:
             await db.execute("""
-                INSERT OR REPLACE INTO scripts (id, script_key, game_name, features, script_code, executors, image_url, channel_message_id, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, CURRENT_TIMESTAMP))
+                INSERT OR REPLACE INTO scripts (id, script_key, slug, game_name, features, script_code, executors, image_url, channel_message_id, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, CURRENT_TIMESTAMP))
             """, (
                 match.get("id"),
-                match.get("script_key", script_key),
+                match.get("script_key", raw_key),
+                match.get("slug", ""),
                 match.get("game_name", "Roblox"),
                 match.get("features", ""),
                 match.get("script_code", ""),
@@ -700,11 +821,24 @@ async def clear_shown_history(user_id: int, game_name: Optional[str] = None):
 
 async def delete_script(script_key: str) -> bool:
     """Deletes a script from both SQLite and persistent JSON store."""
-    script_key = str(script_key).strip()
+    raw_key = str(script_key).strip()
+    clean_k = raw_key.lower()
+    num_id = -1
+    if clean_k.isdigit():
+        num_id = int(clean_k)
+    elif clean_k.startswith("s") and clean_k[1:].isdigit():
+        num_id = int(clean_k[1:])
+    
+    candidate_keys = [raw_key, clean_k]
+    if num_id >= 0:
+        candidate_keys.extend([f"s{num_id}", str(num_id)])
+    candidate_keys = list(dict.fromkeys(candidate_keys))
+    
     deleted = False
     try:
         async with aiosqlite.connect(DB_PATH) as db:
-            cur = await db.execute("DELETE FROM scripts WHERE script_key = ?", (script_key,))
+            placeholders = ",".join("?" for _ in candidate_keys)
+            cur = await db.execute(f"DELETE FROM scripts WHERE script_key IN ({placeholders}) OR id = ?", (*candidate_keys, num_id))
             await db.commit()
             if cur.rowcount > 0:
                 deleted = True
@@ -713,8 +847,10 @@ async def delete_script(script_key: str) -> bool:
 
     try:
         store = _read_scripts_store()
-        if script_key in store:
-            del store[script_key]
+        to_del = [k for k in store if k in candidate_keys or (num_id >= 0 and store[k].get("id") == num_id)]
+        if to_del:
+            for k in to_del:
+                del store[k]
             _write_scripts_store(store)
             deleted = True
     except Exception as e:

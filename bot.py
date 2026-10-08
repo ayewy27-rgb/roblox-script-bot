@@ -267,31 +267,36 @@ async def handle_start(message: Message, command: CommandObject):
         script_key = args.strip()
         script = await database.get_script(script_key)
         
-        if not script and not (script_key.startswith("s") and script_key[1:].isdigit()):
+        if not script:
             clean_arg = script_key.lower().replace("_", " ").replace("-", " ")
-            logger.info(f"Script '{script_key}' not found immediately. Recovering online for '{clean_arg}'...")
-            status_wait = await message.answer("🔄 <i>Загружаю актуальную версию скрипта...</i>")
-            recovered = await script_finder.search_scripts_online(clean_arg, user_id=message.from_user.id)
-            try:
-                await status_wait.delete()
-            except Exception:
-                pass
-            if recovered:
-                best = recovered[0]
-                await database.add_script(
-                    game_name=best["game_name"],
-                    features=best["features"],
-                    script_code=best["script_code"],
-                    executors=post_builder.DEFAULT_EXECUTORS,
-                    image_url=best.get("image_url"),
-                    custom_key=script_key
-                )
-                script = await database.get_script(script_key)
+            search_query = None
+            if not (clean_arg.startswith("s") and clean_arg[1:].isdigit()):
+                search_query = clean_arg
+
+            if search_query and len(search_query) >= 2:
+                logger.info(f"Script '{script_key}' not found immediately. Recovering online for '{search_query}'...")
+                status_wait = await message.answer("🔄 <i>Загружаю актуальную версию скрипта...</i>")
+                recovered = await script_finder.search_scripts_online(search_query, user_id=message.from_user.id)
+                try:
+                    await status_wait.delete()
+                except Exception:
+                    pass
+                if recovered:
+                    best = recovered[0]
+                    await database.add_script(
+                        game_name=best["game_name"],
+                        features=best["features"],
+                        script_code=best["script_code"],
+                        executors=post_builder.DEFAULT_EXECUTORS,
+                        image_url=best.get("image_url"),
+                        custom_key=script_key
+                    )
+                    script = await database.get_script(script_key)
 
         if not script:
             search_kb = InlineKeyboardMarkup(
                 inline_keyboard=[
-                    [InlineKeyboardButton(text="📢 Искать в канале @script_drop", url=channel_url)],
+                    [InlineKeyboardButton(text=f"📢 Перейти в канал @{channel_clean}", url=channel_url)],
                     [InlineKeyboardButton(text="📱 Открыть приложение", web_app=WebAppInfo(url=get_webapp_url(user_id)))],
                 ]
             )
@@ -439,23 +444,28 @@ async def handle_check_subscription(call: CallbackQuery):
 
         # Deliver script
         script = await database.get_script(target)
-        if not script and not (target.startswith("s") and target[1:].isdigit()):
+        if not script:
             clean_target = target.lower().replace("_", " ").replace("-", " ")
-            recovered = await script_finder.search_scripts_online(clean_target, user_id=call.from_user.id)
-            if recovered:
-                best = recovered[0]
-                await database.add_script(
-                    game_name=best["game_name"],
-                    features=best["features"],
-                    script_code=best["script_code"],
-                    executors=post_builder.DEFAULT_EXECUTORS,
-                    image_url=best.get("image_url"),
-                    custom_key=target
-                )
-                script = await database.get_script(target)
+            search_query = None
+            if not (clean_target.startswith("s") and clean_target[1:].isdigit()):
+                search_query = clean_target
+
+            if search_query and len(search_query) >= 2:
+                recovered = await script_finder.search_scripts_online(search_query, user_id=call.from_user.id)
+                if recovered:
+                    best = recovered[0]
+                    await database.add_script(
+                        game_name=best["game_name"],
+                        features=best["features"],
+                        script_code=best["script_code"],
+                        executors=post_builder.DEFAULT_EXECUTORS,
+                        image_url=best.get("image_url"),
+                        custom_key=target
+                    )
+                    script = await database.get_script(target)
 
         if not script:
-            await call.message.answer("⚠️ Скрипт обновляется или временно недоступен. Напишите боту название игры для поиска!")
+            await call.message.answer("⚠️ Скрипт обновляется или временно перемещён. Напишите боту название игры для поиска!")
             return
 
         await database.record_user_received(user_id, target)
@@ -2101,13 +2111,75 @@ async def handle_user_text_message(message: Message, state: FSMContext):
         await perform_search_and_display(message.chat.id, user_id, text, message)
         return
 
-    # 2. SUBSCRIBERS: Ready scripts are published in channel; save suggestion & forward to admin
+    # 2. SUBSCRIBERS: Auto-deliver requested game script or record suggestion
+    # Step A: Direct lookup by key/number/slug in local database
+    script = await database.get_script(text)
+    
+    # Step B: Search local database by game name / synonyms
+    if not script:
+        results = await database.search_scripts(text, limit=1)
+        if results:
+            script = results[0]
+
+    # Step C: If not in local database, search high quality online hubs
+    if not script and len(text) >= 2:
+        try:
+            status_msg = await message.answer(f"🔍 <i>Ищу лучший проверенный скрипт без ключей для «{html.escape(text)}»...</i>")
+            recovered = await script_finder.search_scripts_online(text, max_results=3, user_id=user_id)
+            try:
+                await status_msg.delete()
+            except Exception:
+                pass
+            if recovered:
+                best = recovered[0]
+                new_key = await database.add_script(
+                    game_name=best["game_name"],
+                    features=best["features"],
+                    script_code=best["script_code"],
+                    executors=post_builder.DEFAULT_EXECUTORS,
+                    image_url=best.get("image_url"),
+                )
+                script = await database.get_script(new_key)
+        except Exception as e:
+            logger.error(f"Error auto-searching script online for subscriber: {e}")
+
+    # If script found: check subscription & deliver!
+    if script:
+        script_key = script.get("script_key", "s0")
+        is_sub = await check_user_subscription(user_id, channel)
+        if not is_sub:
+            sub_kb = InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [InlineKeyboardButton(text="📢 Подписаться на канал", url=channel_url)],
+                    [InlineKeyboardButton(text="🔄 Проверить подписку", callback_data=f"check_sub:{script_key}")],
+                ]
+            )
+            sub_text = (
+                f"🔒 <b>СКРИПТ ДЛЯ «{html.escape(script['game_name'])}» НАЙДЕН!</b>\n"
+                "━━━━━━━━━━━━━━━━━━━━━\n"
+                "Чтобы получить скрипт, необходимо подписаться на наш канал:\n"
+                f"📢 <b>@{channel_clean}</b>\n\n"
+                "⚡ <i>После подписки нажмите кнопку «Проверить подписку» ниже — и бот моментально выдаст вам чит!</i>"
+            )
+            sub_banner = getattr(config, "BANNER_SUB_RED", None)
+            if sub_banner and sub_banner.exists():
+                await message.answer_photo(photo=FSInputFile(sub_banner), caption=sub_text, reply_markup=sub_kb)
+            else:
+                await message.answer(sub_text, reply_markup=sub_kb)
+            return
+
+        # Subscribed -> Deliver immediately!
+        await database.record_user_received(user_id, script_key)
+        await deliver_script_to_user(message.chat.id, script, channel_url)
+        return
+
+    # Step D: Only if NO script found anywhere -> record suggestion for channel creator
     req_id = await database.add_script_request(
         user_id=user_id,
         username=message.from_user.username if message.from_user else None,
         full_name=message.from_user.full_name if message.from_user else None,
         game_name=text,
-        note="Сообщение напрямую в чат бота"
+        note="Сообщение напрямую в чат бота (не найдено в базе)"
     )
 
     user_mention = format_user_mention(message.from_user)
